@@ -111,6 +111,7 @@
   .stat-top .thumb img { width: 100%; height: 100%; object-fit: cover; }
   .stat-top .thumb svg { width: 36px; height: 36px; color: var(--accent); }
   .label { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .version { text-align: center; color: var(--muted); font-size: .75rem; margin: 40px 0 0; opacity: .7; }
   .since { color: var(--muted); font-size: .85rem; margin: 0 0 12px; }
   .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
   .kpi { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px; }
@@ -238,6 +239,8 @@
   </form>
 </dialog>
 
+<p class="version" id="version"></p>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -266,7 +269,8 @@ function sampleData() {
   ];
 }
 
-const META_KEY = 'zegarki.meta.v1';
+const APP_VERSION = '1.3';
+const META_KEY = 'zegarki.meta.v2';
 let watches = load();
 let meta = loadMeta();
 
@@ -276,10 +280,14 @@ function loadMeta() {
     const raw = localStorage.getItem(META_KEY);
     if (raw) return JSON.parse(raw);
   } catch (e) { console.warn(e); }
-  // Starsze dane bez tej daty: przyjmij najwcześniejszy zapisany dzień noszenia albo dziś.
-  const earliest = watches.flatMap(w => w.wears).sort()[0];
-  const m = { since: earliest && earliest < today() ? earliest : today() };
-  try { localStorage.setItem(META_KEY, JSON.stringify(m)); } catch (e) {}
+  // Pierwsze uruchomienie tej wersji: jednorazowo zeruje historię noszenia i liczy od dziś.
+  watches.forEach(w => w.wears = []);
+  const m = { since: today() };
+  try {
+    localStorage.setItem(KEY, JSON.stringify(watches));
+    localStorage.setItem(META_KEY, JSON.stringify(m));
+    localStorage.removeItem('zegarki.meta.v1');
+  } catch (e) {}
   return m;
 }
 
@@ -563,6 +571,7 @@ document.querySelectorAll('nav.tabs button').forEach(b => b.addEventListener('cl
 
 function renderAll() {
   renderList(); renderStats();
+  $('#version').textContent = `Wersja ${APP_VERSION}`;
   $('#sinceInfo').textContent = `Historia liczona od: ${fmtDate(meta.since)}`;
 }
 renderAll();
