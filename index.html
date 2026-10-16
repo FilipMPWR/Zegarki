@@ -203,8 +203,8 @@
       </div>
       <div class="box">
         <div class="label">Reset</div>
-        <p>Usuwa wszystkie dane i przywraca przykładowe zegarki.</p>
-        <button class="btn danger" id="resetBtn">Przywróć przykłady</button>
+        <p>Usuwa wszystkie zegarki i historię noszenia z tego urządzenia. Najpierw pobierz kopię zapasową.</p>
+        <button class="btn danger" id="resetBtn">Usuń wszystkie dane</button>
       </div>
     </div>
   </section>
@@ -254,22 +254,7 @@ function daysAgo(n) {
   return d.toLocaleDateString('sv-SE');
 }
 
-// Przykładowe pozycje – ceny i daty są orientacyjne, do edycji.
-function sampleData() {
-  const mk = (brand, model, ref, date, price, notes) => ({
-    id: uid(), brand, model, ref, date, price, notes, photo: '', wears: []
-  });
-  return [
-    mk('Rolex', 'Submariner Date', '126610LN', '2021-05-14', 52000, 'Czarna tarcza i ceramiczny bezel. Na co dzień.'),
-    mk('Rolex', 'Explorer II „Polar”', '226570', '2022-09-03', 48000, 'Biała tarcza, pomarańczowa wskazówka GMT. Idealny w podróż.'),
-    mk('Omega', 'Speedmaster Professional Moonwatch', '310.30.42.50.01.001', '2020-11-20', 31000, 'Ręczny naciąg, kaliber 3861.'),
-    mk('IWC', 'Portugieser Chronograph', 'IW371605', '2019-06-01', 36000, 'Klasyka do garnituru.'),
-    mk('TAG Heuer', 'Monaco', 'CBL2111.FC6453', '2023-03-18', 28000, 'Kwadratowa koperta, niebieska tarcza.'),
-    mk('Chopard', 'Alpine Eagle 41', '298600-3001', '2024-02-10', 60000, 'Stal Lucent A223, tarcza „Aletsch Blue”.')
-  ];
-}
-
-const APP_VERSION = '1.3';
+const APP_VERSION = '1.4';
 const META_KEY = 'zegarki.meta.v2';
 let watches = load();
 let meta = loadMeta();
@@ -296,9 +281,7 @@ function load() {
     const raw = localStorage.getItem(KEY);
     if (raw) return JSON.parse(raw);
   } catch (e) { console.warn(e); }
-  const data = sampleData();
-  try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {}
-  return data;
+  return []; // nowa osoba: pusta kolekcja, bez żadnych przykładów
 }
 
 function save() {
@@ -559,8 +542,8 @@ $('#clearWearsBtn').addEventListener('click', () => {
 });
 
 $('#resetBtn').addEventListener('click', () => {
-  if (!confirm('Usunąć wszystkie dane i przywrócić przykłady?')) return;
-  watches = sampleData(); meta.since = today(); save(); renderAll(); toast('Przywrócono przykłady');
+  if (!confirm('Usunąć wszystkie zegarki i historię noszenia z tego urządzenia? Tej operacji nie można cofnąć.')) return;
+  watches = []; meta.since = today(); save(); renderAll(); toast('Usunięto wszystkie dane');
 });
 
 /* ===== Zakładki ===== */
