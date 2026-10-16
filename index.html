@@ -290,7 +290,7 @@
         <input type="date" id="wearDate" aria-label="Dzień noszenia">
         <button type="button" class="btn small" id="wearAddBtn">Dodaj dzień</button>
       </div>
-      <div class="meta">Zmiany w historii zapisują się od razu.</div>
+      <div class="meta">Zmiany w historii zapisują się od razu. Na co dzień zaznaczaj noszenie w aplikacji „Noszę dziś”.</div>
     </div>
     <div class="dlg-actions">
       <button type="button" class="btn danger" id="delBtn" hidden>Usuń</button>
@@ -342,7 +342,7 @@ function daysAgo(n) {
   return d.toLocaleDateString('sv-SE');
 }
 
-const APP_VERSION = '2.4';
+const APP_VERSION = '2.5';
 const META_KEY = 'zegarki.meta.v2';
 let watches = load();
 let meta = loadMeta();
@@ -441,10 +441,8 @@ function renderList() {
     $('#grid').innerHTML = `<div class="empty">${watches.length ? 'Nic nie pasuje do wyszukiwania.' : 'Kolekcja jest pusta. Dodaj pierwszy zegarek.'}</div>`;
     return;
   }
-  const t = today();
   $('#grid').innerHTML = items.map(w => {
     const last = lastWorn(w);
-    const wornToday = w.wears.includes(t);
     return `
     <article class="card">
       ${(() => { const ph = photosOf(w); return ph.length
@@ -456,7 +454,6 @@ function renderList() {
         <div class="meta">${[esc(w.ref), fmtDate(w.date), fmtPrice(w.price)].filter(Boolean).join(' · ')}</div>
         <div class="worn">${last ? `Noszony ${w.wears.length}× · ostatnio ${relDays(last)}` : 'Jeszcze nienoszony'}</div>
         <div class="actions">
-          <button class="btn accent ${wornToday ? 'on' : ''}" data-wear="${w.id}">${wornToday ? '✓ Noszę dziś' : 'Noszę dziś'}</button>
           <button class="btn" data-edit="${w.id}">Edytuj</button>
         </div>
       </div>
@@ -471,29 +468,12 @@ function plural(n, one, few, many) {
 }
 
 $('#grid').addEventListener('click', e => {
-  const wear = e.target.closest('[data-wear]');
   const edit = e.target.closest('[data-edit]');
   const galleryBtn = e.target.closest('[data-gallery]');
   if (galleryBtn) openGallery(galleryBtn.dataset.gallery);
-  else if (wear) toggleWear(wear.dataset.wear);
   else if (edit) openForm(edit.dataset.edit);
 });
 $('#search').addEventListener('input', renderList);
-
-function toggleWear(id) {
-  const w = watches.find(x => x.id === id);
-  const t = today();
-  if (w.wears.includes(t)) {
-    w.wears = w.wears.filter(d => d !== t);
-    toast('Cofnięto dzisiejsze noszenie');
-    cloudWear(id, t, false);
-  } else {
-    w.wears.push(t);
-    toast(`Zapisano: ${w.brand} ${w.model} – dziś`);
-    cloudWear(id, t, true);
-  }
-  save(); renderAll();
-}
 
 /* ===== Statystyki ===== */
 function sinceLine() {
@@ -507,7 +487,7 @@ function renderStats() {
   const allDays = new Set(watches.flatMap(w => w.wears));
   const totalWears = allDays.size;
   if (!totalWears) {
-    el.innerHTML = `${sinceLine()}<div class="empty">Brak zapisanych dni noszenia. Kliknij „Noszę dziś” przy zegarku.</div>`;
+    el.innerHTML = `${sinceLine()}<div class="empty">Brak zapisanych dni noszenia. Zaznaczaj je w aplikacji <a href="noszenie.html">„Noszę dziś”</a>.</div>`;
     return;
   }
   const ranked = watches.slice().sort((a, b) => b.wears.length - a.wears.length || (lastWorn(b) || '').localeCompare(lastWorn(a) || ''));
