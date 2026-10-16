@@ -39,6 +39,7 @@
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html { -webkit-text-size-adjust: 100%; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
@@ -111,6 +112,8 @@
   .stat-top .thumb img { width: 100%; height: 100%; object-fit: cover; }
   .stat-top .thumb svg { width: 36px; height: 36px; color: var(--accent); }
   .label { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .sync-badge { margin-top: 6px; background: none; border: 0; padding: 0; font: 500 .8rem var(--sans); color: var(--muted); cursor: pointer; }
+  .sync-badge.ok { color: var(--accent); }
   .version { text-align: center; color: var(--muted); font-size: .75rem; margin: 40px 0 0; opacity: .7; }
   .since { color: var(--muted); font-size: .85rem; margin: 0 0 12px; }
   .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
@@ -166,6 +169,7 @@
   <header>
     <h1>Kolekcja zegarków</h1>
     <p class="sub" id="summary"></p>
+    <button class="sync-badge" id="syncBadge" type="button"></button>
   </header>
 
   <nav class="tabs" role="tablist">
@@ -187,8 +191,14 @@
   <section id="tab-settings" hidden>
     <div class="settings">
       <div class="box">
+        <div class="label">Synchronizacja</div>
+        <p id="syncText">Łączenie…</p>
+        <button class="btn primary" id="loginBtn" hidden>Zaloguj przez Google</button>
+        <button class="btn" id="logoutBtn" hidden>Wyloguj</button>
+      </div>
+      <div class="box">
         <div class="label">Kopia zapasowa</div>
-        <p>Dane są zapisane tylko w tej przeglądarce. Regularnie pobieraj kopię, aby ich nie stracić (np. po wyczyszczeniu historii).</p>
+        <p>Plik z całą kolekcją do zachowania u siebie – na wszelki wypadek, także przy włączonej synchronizacji.</p>
         <button class="btn" id="exportBtn">Pobierz kopię (JSON)</button>
       </div>
       <div class="box">
@@ -203,7 +213,7 @@
       </div>
       <div class="box">
         <div class="label">Reset</div>
-        <p>Usuwa wszystkie zegarki i historię noszenia z tego urządzenia. Najpierw pobierz kopię zapasową.</p>
+        <p>Usuwa wszystkie zegarki i historię noszenia (po zalogowaniu także z chmury, czyli ze wszystkich urządzeń). Najpierw pobierz kopię zapasową.</p>
         <button class="btn danger" id="resetBtn">Usuń wszystkie dane</button>
       </div>
     </div>
@@ -239,6 +249,17 @@
   </form>
 </dialog>
 
+<dialog id="syncDlg">
+  <form method="dialog">
+    <h2>Które dane zachować?</h2>
+    <p id="syncDlgText" style="margin:0;color:var(--muted)"></p>
+    <div class="dlg-actions" style="flex-direction:column;align-items:stretch">
+      <button class="btn primary" value="cloud">Użyj danych z chmury</button>
+      <button class="btn" value="local">Wyślij dane z tego urządzenia</button>
+    </div>
+  </form>
+</dialog>
+
 <p class="version" id="version"></p>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -254,7 +275,7 @@ function daysAgo(n) {
   return d.toLocaleDateString('sv-SE');
 }
 
-const APP_VERSION = '1.4';
+const APP_VERSION = '2.0';
 const META_KEY = 'zegarki.meta.v2';
 let watches = load();
 let meta = loadMeta();
@@ -374,9 +395,11 @@ function toggleWear(id) {
   if (w.wears.includes(t)) {
     w.wears = w.wears.filter(d => d !== t);
     toast('Cofnięto dzisiejsze noszenie');
+    cloudWear(id, t, false);
   } else {
     w.wears.push(t);
     toast(`Zapisano: ${w.brand} ${w.model} – dziś`);
+    cloudWear(id, t, true);
   }
   save(); renderAll();
 }
@@ -493,9 +516,11 @@ form.addEventListener('submit', e => {
     photo: pendingPhoto
   };
   const backup = JSON.stringify(watches);
-  if (editingId) Object.assign(watches.find(x => x.id === editingId), data);
-  else watches.push({ id: uid(), wears: [], ...data });
+  let w;
+  if (editingId) w = Object.assign(watches.find(x => x.id === editingId), data);
+  else watches.push(w = { id: uid(), wears: [], ...data });
   if (!save()) { watches = JSON.parse(backup); return; }
+  cloudPut(w);
   dlg.close(); renderAll();
   toast(editingId ? 'Zapisano zmiany' : 'Dodano zegarek');
 });
@@ -504,6 +529,7 @@ $('#delBtn').addEventListener('click', () => {
   const w = watches.find(x => x.id === editingId);
   if (!confirm(`Usunąć ${w.brand} ${w.model}? Tej operacji nie można cofnąć.`)) return;
   watches = watches.filter(x => x.id !== editingId);
+  cloudRemove(editingId);
   save(); dlg.close(); renderAll();
   toast('Usunięto zegarek');
 });
@@ -529,7 +555,7 @@ $('#importFile').addEventListener('change', async e => {
     if (!confirm(`Wczytać ${data.length} pozycji i zastąpić obecne dane?`)) return;
     watches = data.map(w => ({ id: w.id || uid(), wears: [], photo: '', ...w }));
     meta.since = parsed.since || watches.flatMap(w => w.wears).sort()[0] || today();
-    save(); renderAll(); toast('Wczytano kopię');
+    save(); cloudReplaceAll(); renderAll(); toast('Wczytano kopię');
   } catch { toast('To nie jest prawidłowy plik kopii'); }
   e.target.value = '';
 });
@@ -538,12 +564,12 @@ $('#clearWearsBtn').addEventListener('click', () => {
   if (!confirm('Wyzerować historię noszenia wszystkich zegarków? Tej operacji nie można cofnąć.')) return;
   watches.forEach(w => w.wears = []);
   meta.since = today();
-  save(); renderAll(); toast('Historia noszenia wyzerowana');
+  save(); cloudReplaceAll(); renderAll(); toast('Historia noszenia wyzerowana');
 });
 
 $('#resetBtn').addEventListener('click', () => {
   if (!confirm('Usunąć wszystkie zegarki i historię noszenia z tego urządzenia? Tej operacji nie można cofnąć.')) return;
-  watches = []; meta.since = today(); save(); renderAll(); toast('Usunięto wszystkie dane');
+  watches = []; meta.since = today(); save(); cloudReplaceAll(); renderAll(); toast('Usunięto wszystkie dane');
 });
 
 /* ===== Zakładki ===== */
@@ -552,12 +578,182 @@ document.querySelectorAll('nav.tabs button').forEach(b => b.addEventListener('cl
   ['list', 'stats', 'settings'].forEach(t => $('#tab-' + t).hidden = t !== b.dataset.tab);
 }));
 
+/* ===== Synchronizacja (Firebase) ===== */
+// Te dane nie są tajne – dostęp chronią reguły bezpieczeństwa w Firebase (tylko konto ALLOWED_EMAIL).
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyCTIAgJaT9rRadvbUDNFn0ED2jyhsTm4s8',
+  authDomain: 'zegarki-6cb29.firebaseapp.com',
+  projectId: 'zegarki-6cb29',
+  storageBucket: 'zegarki-6cb29.firebasestorage.app',
+  messagingSenderId: '722188125966',
+  appId: '1:722188125966:web:71e0ce4af9ac50c738f95f'
+};
+const ALLOWED_EMAIL = 'filip.hpa@gmail.com';
+const FB_URL = 'https://www.gstatic.com/firebasejs/10.14.1/';
+const SYNCED_KEY = 'zegarki.syncedUid';
+const cloud = { fs: null, authMod: null, auth: null, db: null, user: null, unsub: [], status: 'Łączenie…', ok: false };
+
+function setSyncStatus(text, ok = false) {
+  cloud.status = text; cloud.ok = ok; renderSync();
+}
+function renderSync() {
+  $('#syncText').textContent = cloud.status;
+  $('#syncBadge').textContent = cloud.user ? (cloud.ok ? '☁︎ Zsynchronizowano' : '☁︎ ' + cloud.status) : '○ Bez synchronizacji – dane tylko na tym urządzeniu';
+  $('#syncBadge').classList.toggle('ok', !!cloud.user && cloud.ok);
+  $('#loginBtn').hidden = !cloud.auth || !!cloud.user;
+  $('#logoutBtn').hidden = !cloud.user;
+}
+$('#syncBadge').addEventListener('click', () => document.querySelector('[data-tab=settings]').click());
+
+async function initCloud() {
+  renderSync();
+  try {
+    const [appMod, authMod, fs] = await Promise.all([
+      import(FB_URL + 'firebase-app.js'), import(FB_URL + 'firebase-auth.js'), import(FB_URL + 'firebase-firestore.js')
+    ]);
+    const app = appMod.initializeApp(FIREBASE_CONFIG);
+    cloud.fs = fs; cloud.authMod = authMod;
+    // Pamięć podręczna w przeglądarce: zmiany zrobione offline wyślą się po odzyskaniu internetu.
+    cloud.db = fs.initializeFirestore(app, {
+      ignoreUndefinedProperties: true,
+      localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() })
+    });
+    cloud.auth = authMod.getAuth(app);
+    setSyncStatus('Nie zalogowano. Zaloguj się, aby synchronizować dane między urządzeniami.');
+    authMod.onAuthStateChanged(cloud.auth, onUser);
+  } catch (e) {
+    console.warn(e);
+    setSyncStatus('Synchronizacja niedostępna (brak internetu?). Dane zapisują się na tym urządzeniu.');
+  }
+}
+
+$('#loginBtn').addEventListener('click', async () => {
+  const { GoogleAuthProvider, signInWithPopup } = cloud.authMod;
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account', login_hint: ALLOWED_EMAIL });
+  try {
+    await signInWithPopup(cloud.auth, provider);
+  } catch (e) {
+    console.warn(e);
+    const msg = {
+      'auth/popup-blocked': 'Przeglądarka zablokowała okno logowania – zezwól na wyskakujące okna dla tej strony.',
+      'auth/unauthorized-domain': 'Ta domena nie jest dodana w Firebase (Authentication → Settings → Authorized domains).',
+      'auth/operation-not-allowed': 'Logowanie Google nie jest włączone w Firebase (Authentication → Sign-in method).'
+    }[e.code];
+    if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') toast(msg || 'Logowanie nieudane: ' + (e.code || e.message));
+  }
+});
+$('#logoutBtn').addEventListener('click', () => cloud.authMod.signOut(cloud.auth));
+
+async function onUser(user) {
+  cloud.unsub.forEach(f => f()); cloud.unsub = []; cloud.user = null;
+  if (!user) { setSyncStatus('Nie zalogowano. Zaloguj się, aby synchronizować dane między urządzeniami.'); return; }
+  if ((user.email || '').toLowerCase() !== ALLOWED_EMAIL) {
+    await cloud.authMod.signOut(cloud.auth);
+    toast(`Konto ${user.email} nie ma dostępu do tej kolekcji`);
+    return;
+  }
+  setSyncStatus('Pobieranie danych z chmury…');
+  try {
+    const { collection, doc, getDocs, getDoc } = cloud.fs;
+    const [snap, metaSnap] = await Promise.all([
+      getDocs(collection(cloud.db, 'users', user.uid, 'watches')),
+      getDoc(doc(cloud.db, 'users', user.uid))
+    ]);
+    const remote = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    cloud.user = user;
+    const syncedBefore = localStorage.getItem(SYNCED_KEY) === user.uid;
+    if (!remote.length && !metaSnap.exists()) {
+      // Chmura pusta (pierwsze urządzenie): wyślij dane z tego urządzenia.
+      await replaceCloud();
+      if (watches.length) toast('Wysłano kolekcję do chmury');
+    } else if (!syncedBefore && watches.length && !sameData(watches, remote)) {
+      // Na tym urządzeniu są inne dane niż w chmurze – zapytaj, które zachować.
+      try { localStorage.setItem('zegarki.kopia-przed-synchronizacja', JSON.stringify({ since: meta.since, watches })); } catch (e) {}
+      if (await askSyncChoice(remote.length) === 'local') await replaceCloud();
+    }
+    localStorage.setItem(SYNCED_KEY, user.uid);
+    listen(user.uid);
+  } catch (e) {
+    console.error(e);
+    cloud.user = null;
+    setSyncStatus(e.code === 'permission-denied'
+      ? 'Brak dostępu do bazy – sprawdź reguły (Rules) w Firestore.'
+      : 'Błąd synchronizacji: ' + (e.code || e.message));
+  }
+}
+
+function askSyncChoice(remoteCount) {
+  return new Promise(resolve => {
+    const d = $('#syncDlg');
+    $('#syncDlgText').textContent =
+      `W chmurze: ${remoteCount} ${plural(remoteCount, 'zegarek', 'zegarki', 'zegarków')}. Na tym urządzeniu: ${watches.length} ${plural(watches.length, 'zegarek', 'zegarki', 'zegarków')}. ` +
+      `„Użyj danych z chmury” zastąpi dane na tym urządzeniu. „Wyślij dane z tego urządzenia” zastąpi dane w chmurze (i na innych urządzeniach).`;
+    d.onclose = () => resolve(d.returnValue === 'local' ? 'local' : 'cloud');
+    d.returnValue = '';
+    d.showModal();
+  });
+}
+
+function sameData(a, b) {
+  const norm = list => JSON.stringify(list.map(w => [w.id, w.brand, w.model, w.ref || '', w.date || '', w.price ?? null, w.notes || '', w.photo || '', (w.wears || []).slice().sort()])
+    .sort((x, y) => x[0].localeCompare(y[0])));
+  return norm(a) === norm(b);
+}
+
+// Nasłuch zmian: gdy cokolwiek zmieni się w chmurze (np. z telefonu), od razu odświeża widok.
+function listen(u) {
+  const { collection, doc, onSnapshot } = cloud.fs;
+  cloud.unsub.push(onSnapshot(collection(cloud.db, 'users', u, 'watches'), { includeMetadataChanges: true }, snap => {
+    watches = snap.docs.map(d => ({ id: d.id, wears: [], photo: '', ...d.data() }));
+    save(); renderAll();
+    if (snap.metadata.hasPendingWrites) setSyncStatus(navigator.onLine ? 'Wysyłanie zmian…' : 'Offline – zmiany wyślą się po połączeniu');
+    else if (snap.metadata.fromCache) setSyncStatus('Offline – pokazuję ostatnio pobrane dane');
+    else setSyncStatus(`Zalogowano jako ${cloud.user?.email}. Zmiany synchronizują się automatycznie.`, true);
+  }, e => { console.error(e); setSyncStatus('Błąd synchronizacji: ' + (e.code || e.message)); }));
+  cloud.unsub.push(onSnapshot(doc(cloud.db, 'users', u), s => {
+    if (s.exists() && s.data().since && s.data().since !== meta.since) { meta.since = s.data().since; save(); renderAll(); }
+  }, e => console.error(e)));
+}
+
+const watchRef = id => cloud.fs.doc(cloud.db, 'users', cloud.user.uid, 'watches', id);
+const withoutId = ({ id, ...rest }) => rest;
+function cloudDo(fn) {
+  if (!cloud.user) return;
+  Promise.resolve().then(fn).catch(e => { console.error(e); toast('Nie udało się zapisać w chmurze: ' + (e.code || e.message)); });
+}
+function cloudPut(w) { cloudDo(() => cloud.fs.setDoc(watchRef(w.id), withoutId(w))); }
+function cloudRemove(id) { cloudDo(() => cloud.fs.deleteDoc(watchRef(id))); }
+function cloudWear(id, date, add) {
+  const { updateDoc, arrayUnion, arrayRemove } = cloud.fs || {};
+  cloudDo(() => updateDoc(watchRef(id), { wears: add ? arrayUnion(date) : arrayRemove(date) }));
+}
+function cloudReplaceAll() { cloudDo(replaceCloud); }
+
+// Zastępuje całą zawartość chmury danymi z tego urządzenia.
+async function replaceCloud() {
+  const { collection, doc, getDocs, writeBatch } = cloud.fs;
+  const u = cloud.user.uid;
+  const existing = await getDocs(collection(cloud.db, 'users', u, 'watches'));
+  const ops = [];
+  const keep = new Set(watches.map(w => w.id));
+  existing.docs.forEach(d => { if (!keep.has(d.id)) ops.push(b => b.delete(d.ref)); });
+  watches.forEach(w => ops.push(b => b.set(watchRef(w.id), withoutId(w))));
+  ops.push(b => b.set(doc(cloud.db, 'users', u), { since: meta.since }));
+  for (let i = 0; i < ops.length; i += 400) {
+    const batch = writeBatch(cloud.db);
+    ops.slice(i, i + 400).forEach(op => op(batch));
+    await batch.commit();
+  }
+}
+
 function renderAll() {
   renderList(); renderStats();
   $('#version').textContent = `Wersja ${APP_VERSION}`;
   $('#sinceInfo').textContent = `Historia liczona od: ${fmtDate(meta.since)}`;
 }
 renderAll();
+initCloud();
 </script>
 </body>
 </html>
