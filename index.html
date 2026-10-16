@@ -164,6 +164,18 @@
   .wear-chip button:hover { background: var(--line); color: var(--danger); }
   .wear-add { display: flex; gap: 8px; }
   .wear-add input { flex: 1; min-width: 0; }
+  .ord-list { display: grid; gap: 6px; }
+  .ord-row { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 8px; border: 1px solid var(--line); border-radius: 12px; }
+  .ord-row .n { width: 20px; text-align: right; color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; flex: none; }
+  .ord-row .t { width: 40px; height: 40px; border-radius: 8px; overflow: hidden; background: var(--accent-soft); flex: none; }
+  .ord-row .t img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ord-row .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .9rem; }
+  .ord-row .nm b { display: block; font-size: .65rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .ord-row button { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface);
+    color: var(--text); font-size: 1rem; cursor: pointer; flex: none; }
+  .ord-row button:disabled { opacity: .3; cursor: default; }
+  .ord-row.moved { animation: ordflash .5s; }
+  @keyframes ordflash { from { background: var(--accent-soft); } to { background: transparent; } }
   .dlg-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; flex-wrap: wrap; }
   .dlg-actions .spacer { flex: 1; }
 
@@ -208,6 +220,7 @@
   <section id="tab-list">
     <div class="toolbar">
       <input type="search" id="search" placeholder="Szukaj…" aria-label="Szukaj">
+      <button class="btn" id="orderBtn" title="Ustaw kolejność" aria-label="Ustaw kolejność">⇅</button>
       <button class="btn primary" id="addBtn">+ Dodaj</button>
     </div>
     <div class="grid" id="grid"></div>
@@ -288,6 +301,20 @@
   </form>
 </dialog>
 
+<dialog id="orderDlg">
+  <form method="dialog" id="orderForm">
+    <h2>Kolejność</h2>
+    <p class="meta" style="margin:0">Strzałkami przesuń zegarki w górę lub w dół. Ta kolejność obowiązuje w obu wersjach.</p>
+    <div class="ord-list" id="ordList"></div>
+    <div class="dlg-actions">
+      <button type="button" class="btn" id="ordAlpha">Alfabetycznie</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn" id="ordCancel">Anuluj</button>
+      <button type="submit" class="btn primary">Zapisz</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="syncDlg">
   <form method="dialog">
     <h2>Które dane zachować?</h2>
@@ -315,7 +342,7 @@ function daysAgo(n) {
   return d.toLocaleDateString('sv-SE');
 }
 
-const APP_VERSION = '2.3';
+const APP_VERSION = '2.4';
 const META_KEY = 'zegarki.meta.v2';
 let watches = load();
 let meta = loadMeta();
@@ -380,6 +407,9 @@ function openGallery(id, start = 0) {
   Zdjecia.gallery(photosOf(w).map(p => ({ thumb: p.thumb, load: () => fullSrc(w, p) })), start, `${w.brand} ${w.model}`);
 }
 
+// Kolejność ustawiona przez użytkownika; zegarki bez ustalonej pozycji – na końcu, alfabetycznie.
+const byOrder = (a, b) => (a.order ?? Infinity) - (b.order ?? Infinity) || (a.brand + a.model).localeCompare(b.brand + b.model, 'pl');
+
 function lastWorn(w) {
   return w.wears.length ? w.wears.slice().sort().at(-1) : null;
 }
@@ -401,7 +431,7 @@ function renderList() {
   const q = $('#search').value.trim().toLowerCase();
   const items = watches
     .filter(w => !q || [w.brand, w.model, w.ref, w.notes].join(' ').toLowerCase().includes(q))
-    .sort((a, b) => (a.brand + a.model).localeCompare(b.brand + b.model, 'pl'));
+    .sort(byOrder);
 
   const total = watches.reduce((s, w) => s + (Number(w.price) || 0), 0);
   const count = q ? `Znaleziono ${items.length} z ${watches.length}` : `${watches.length} ${plural(watches.length, 'zegarek', 'zegarki', 'zegarków')}`;
@@ -646,7 +676,7 @@ form.addEventListener('submit', e => {
   const backup = JSON.stringify(watches);
   let w;
   if (editingId) w = Object.assign(watches.find(x => x.id === editingId), data);
-  else watches.push(w = { id, wears: [], ...data });
+  else watches.push(w = { id, wears: [], order: watches.reduce((m, x) => Math.max(m, x.order ?? -1), -1) + 1, ...data });
   if (!save()) { watches = JSON.parse(backup); return; }
   pendingPhotos.filter(p => p.isNew && p.src).forEach(p => cloudPhotoPut(p.id, id, p.src));
   old.filter(p => !data.photos.some(n => n.id === p.id)).forEach(p => cloudPhotoDelete(p.id));
@@ -663,6 +693,47 @@ $('#delBtn').addEventListener('click', () => {
   cloudRemove(editingId);
   save(); dlg.close(); renderAll();
   toast('Usunięto zegarek');
+});
+
+/* ===== Kolejność ===== */
+const orderDlg = $('#orderDlg');
+let ordWork = [];
+function renderOrder(movedId) {
+  $('#ordList').innerHTML = ordWork.map((w, i) => `
+    <div class="ord-row ${w.id === movedId ? 'moved' : ''}">
+      <span class="n">${i + 1}</span>
+      <span class="t">${mainThumb(w) ? `<img src="${mainThumb(w)}" alt="">` : ''}</span>
+      <span class="nm"><b>${esc(w.brand)}</b>${esc(w.model)}</span>
+      <button type="button" data-ord="-1" data-id="${w.id}" ${i === 0 ? 'disabled' : ''} aria-label="W górę">↑</button>
+      <button type="button" data-ord="1" data-id="${w.id}" ${i === ordWork.length - 1 ? 'disabled' : ''} aria-label="W dół">↓</button>
+    </div>`).join('');
+}
+$('#orderBtn').addEventListener('click', () => {
+  if (watches.length < 2) return toast('Dodaj co najmniej dwa zegarki');
+  ordWork = watches.slice().sort(byOrder);
+  renderOrder(); orderDlg.showModal();
+});
+$('#ordList').addEventListener('click', e => {
+  const b = e.target.closest('[data-ord]');
+  if (!b) return;
+  const i = ordWork.findIndex(w => w.id === b.dataset.id), j = i + +b.dataset.ord;
+  if (j < 0 || j >= ordWork.length) return;
+  [ordWork[i], ordWork[j]] = [ordWork[j], ordWork[i]];
+  renderOrder(b.dataset.id);
+  $(`#ordList [data-id="${b.dataset.id}"][data-ord="${b.dataset.ord}"]:not(:disabled)`)?.focus();
+});
+$('#ordAlpha').addEventListener('click', () => {
+  ordWork.sort((a, b) => (a.brand + a.model).localeCompare(b.brand + b.model, 'pl')); renderOrder();
+});
+$('#ordCancel').addEventListener('click', () => orderDlg.close());
+$('#orderForm').addEventListener('submit', e => {
+  e.preventDefault();
+  ordWork.forEach((w, i) => {
+    if (w.order === i) return;
+    w.order = i;
+    cloudDo(() => cloud.fs.updateDoc(watchRef(w.id), { order: i }));
+  });
+  save(); orderDlg.close(); renderAll(); toast('Zapisano kolejność');
 });
 
 /* ===== Kopia zapasowa ===== */
