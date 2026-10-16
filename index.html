@@ -111,6 +111,7 @@
   .stat-top .thumb img { width: 100%; height: 100%; object-fit: cover; }
   .stat-top .thumb svg { width: 36px; height: 36px; color: var(--accent); }
   .label { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .since { color: var(--muted); font-size: .85rem; margin: 0 0 12px; }
   .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
   .kpi { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px; }
   .kpi b { display: block; font: 600 1.6rem/1.2 var(--serif); font-variant-numeric: lining-nums; }
@@ -196,7 +197,7 @@
       </div>
       <div class="box">
         <div class="label">Historia noszenia</div>
-        <p>Zeruje licznik „Noszę dziś” dla wszystkich zegarków. Zegarki, ceny i zdjęcia zostają bez zmian.</p>
+        <p>Zeruje licznik „Noszę dziś” dla wszystkich zegarków i zaczyna liczenie od dziś. Zegarki, ceny i zdjęcia zostają bez zmian.<br><strong id="sinceInfo"></strong></p>
         <button class="btn danger" id="clearWearsBtn">Wyzeruj historię noszenia</button>
       </div>
       <div class="box">
@@ -265,7 +266,22 @@ function sampleData() {
   ];
 }
 
+const META_KEY = 'zegarki.meta.v1';
 let watches = load();
+let meta = loadMeta();
+
+// Data, od której liczona jest historia noszenia ("wyzerowano dnia").
+function loadMeta() {
+  try {
+    const raw = localStorage.getItem(META_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { console.warn(e); }
+  // Starsze dane bez tej daty: przyjmij najwcześniejszy zapisany dzień noszenia albo dziś.
+  const earliest = watches.flatMap(w => w.wears).sort()[0];
+  const m = { since: earliest && earliest < today() ? earliest : today() };
+  try { localStorage.setItem(META_KEY, JSON.stringify(m)); } catch (e) {}
+  return m;
+}
 
 function load() {
   try {
@@ -280,6 +296,7 @@ function load() {
 function save() {
   try {
     localStorage.setItem(KEY, JSON.stringify(watches));
+    localStorage.setItem(META_KEY, JSON.stringify(meta));
     return true;
   } catch (e) {
     toast('Brak miejsca w pamięci przeglądarki – spróbuj mniejszego zdjęcia.');
@@ -374,11 +391,16 @@ function toggleWear(id) {
 }
 
 /* ===== Statystyki ===== */
+function sinceLine() {
+  const days = Math.round((new Date(today()) - new Date(meta.since)) / 86400000) + 1;
+  return `<p class="since">Liczone od ${fmtDate(meta.since)} · ${days} ${plural(days, 'dzień', 'dni', 'dni')}</p>`;
+}
+
 function renderStats() {
   const el = $('#tab-stats');
   const totalWears = watches.reduce((s, w) => s + w.wears.length, 0);
   if (!totalWears) {
-    el.innerHTML = `<div class="empty">Brak zapisanych dni noszenia. Kliknij „Noszę dziś” przy zegarku.</div>`;
+    el.innerHTML = `${sinceLine()}<div class="empty">Brak zapisanych dni noszenia. Kliknij „Noszę dziś” przy zegarku.</div>`;
     return;
   }
   const ranked = watches.slice().sort((a, b) => b.wears.length - a.wears.length || (lastWorn(b) || '').localeCompare(lastWorn(a) || ''));
@@ -389,7 +411,7 @@ function renderStats() {
     .sort((a, b) => lastWorn(a).localeCompare(lastWorn(b)))[0];
   const never = watches.filter(w => !w.wears.length).length;
 
-  el.innerHTML = `
+  el.innerHTML = `${sinceLine()}
     <div class="stat-top">
       <div class="thumb">${top.photo ? `<img src="${top.photo}" alt="">` : watchIcon}</div>
       <div>
@@ -497,7 +519,7 @@ $('#delBtn').addEventListener('click', () => {
 
 /* ===== Kopia zapasowa ===== */
 $('#exportBtn').addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify(watches, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ since: meta.since, watches }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `zegarki-${today()}.json`;
@@ -509,10 +531,13 @@ $('#importFile').addEventListener('change', async e => {
   const f = e.target.files[0];
   if (!f) return;
   try {
-    const data = JSON.parse(await f.text());
+    const parsed = JSON.parse(await f.text());
+    // Obsługuje nowy format { since, watches } i starszy (sama lista).
+    const data = Array.isArray(parsed) ? parsed : parsed.watches;
     if (!Array.isArray(data)) throw new Error();
     if (!confirm(`Wczytać ${data.length} pozycji i zastąpić obecne dane?`)) return;
     watches = data.map(w => ({ id: w.id || uid(), wears: [], photo: '', ...w }));
+    meta.since = parsed.since || watches.flatMap(w => w.wears).sort()[0] || today();
     save(); renderAll(); toast('Wczytano kopię');
   } catch { toast('To nie jest prawidłowy plik kopii'); }
   e.target.value = '';
@@ -521,12 +546,13 @@ $('#importFile').addEventListener('change', async e => {
 $('#clearWearsBtn').addEventListener('click', () => {
   if (!confirm('Wyzerować historię noszenia wszystkich zegarków? Tej operacji nie można cofnąć.')) return;
   watches.forEach(w => w.wears = []);
+  meta.since = today();
   save(); renderAll(); toast('Historia noszenia wyzerowana');
 });
 
 $('#resetBtn').addEventListener('click', () => {
   if (!confirm('Usunąć wszystkie dane i przywrócić przykłady?')) return;
-  watches = sampleData(); save(); renderAll(); toast('Przywrócono przykłady');
+  watches = sampleData(); meta.since = today(); save(); renderAll(); toast('Przywrócono przykłady');
 });
 
 /* ===== Zakładki ===== */
@@ -535,7 +561,10 @@ document.querySelectorAll('nav.tabs button').forEach(b => b.addEventListener('cl
   ['list', 'stats', 'settings'].forEach(t => $('#tab-' + t).hidden = t !== b.dataset.tab);
 }));
 
-function renderAll() { renderList(); renderStats(); }
+function renderAll() {
+  renderList(); renderStats();
+  $('#sinceInfo').textContent = `Historia liczona od: ${fmtDate(meta.since)}`;
+}
 renderAll();
 </script>
 </body>
