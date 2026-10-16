@@ -144,6 +144,14 @@
   .photo-edit { display: flex; gap: 12px; align-items: center; }
   .photo-edit .prev { width: 72px; height: 72px; border-radius: 12px; background: var(--accent-soft); overflow: hidden; flex: none; }
   .photo-edit .prev img { width: 100%; height: 100%; object-fit: cover; }
+  .wear-edit { display: grid; gap: 8px; padding-top: 4px; border-top: 1px solid var(--line); }
+  .wear-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .wear-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--accent-soft); color: var(--text);
+    border-radius: 999px; padding: 4px 4px 4px 12px; font-size: .82rem; }
+  .wear-chip button { border: 0; background: none; color: var(--muted); width: 26px; height: 26px; border-radius: 50%; cursor: pointer; font-size: 1rem; line-height: 1; }
+  .wear-chip button:hover { background: var(--line); color: var(--danger); }
+  .wear-add { display: flex; gap: 8px; }
+  .wear-add input { flex: 1; min-width: 0; }
   .dlg-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; flex-wrap: wrap; }
   .dlg-actions .spacer { flex: 1; }
 
@@ -245,6 +253,15 @@
     </div>
     <label class="f">Cena (zł)<input name="price" type="number" min="0" step="1" inputmode="numeric"></label>
     <label class="f">Notatki<textarea name="notes"></textarea></label>
+    <div class="wear-edit" id="wearSection">
+      <div class="label" id="wearTitle">Historia noszenia</div>
+      <div class="wear-list" id="wearList"></div>
+      <div class="wear-add">
+        <input type="date" id="wearDate" aria-label="Dzień noszenia">
+        <button type="button" class="btn small" id="wearAddBtn">Dodaj dzień</button>
+      </div>
+      <div class="meta">Zmiany w historii zapisują się od razu.</div>
+    </div>
     <div class="dlg-actions">
       <button type="button" class="btn danger" id="delBtn" hidden>Usuń</button>
       <span class="spacer"></span>
@@ -280,7 +297,7 @@ function daysAgo(n) {
   return d.toLocaleDateString('sv-SE');
 }
 
-const APP_VERSION = '2.1';
+const APP_VERSION = '2.2';
 const META_KEY = 'zegarki.meta.v2';
 let watches = load();
 let meta = loadMeta();
@@ -412,7 +429,9 @@ function sinceLine() {
 
 function renderStats() {
   const el = $('#tab-stats');
-  const totalWears = watches.reduce((s, w) => s + w.wears.length, 0);
+  // Kilka zegarków jednego dnia = jeden dzień w statystyce dni.
+  const allDays = new Set(watches.flatMap(w => w.wears));
+  const totalWears = allDays.size;
   if (!totalWears) {
     el.innerHTML = `${sinceLine()}<div class="empty">Brak zapisanych dni noszenia. Kliknij „Noszę dziś” przy zegarku.</div>`;
     return;
@@ -420,7 +439,7 @@ function renderStats() {
   const ranked = watches.slice().sort((a, b) => b.wears.length - a.wears.length || (lastWorn(b) || '').localeCompare(lastWorn(a) || ''));
   const top = ranked[0];
   const max = top.wears.length;
-  const last30 = watches.reduce((s, w) => s + w.wears.filter(d => d >= daysAgo(29)).length, 0);
+  const last30 = [...allDays].filter(d => d >= daysAgo(29)).length;
   const neglected = watches.filter(w => w.wears.length)
     .sort((a, b) => lastWorn(a).localeCompare(lastWorn(b)))[0];
   const never = watches.filter(w => !w.wears.length).length;
@@ -431,11 +450,11 @@ function renderStats() {
       <div>
         <div class="label">Noszony najczęściej</div>
         <div class="model">${esc(top.brand)} ${esc(top.model)}</div>
-        <div class="meta">${max}× · ${Math.round(max / totalWears * 100)}% wszystkich dni</div>
+        <div class="meta">${max}× · w ${Math.round(max / totalWears * 100)}% dni z zegarkiem</div>
       </div>
     </div>
     <div class="kpis">
-      <div class="kpi"><div class="label">Dni łącznie</div><b>${totalWears}</b></div>
+      <div class="kpi"><div class="label">Dni z zegarkiem</div><b>${totalWears}</b></div>
       <div class="kpi"><div class="label">Ostatnie 30 dni</div><b>${last30}</b></div>
       <div class="kpi"><div class="label">${never ? 'Nienoszone' : 'Najdłużej w szufladzie'}</div>
         <b>${never ? never : ''}</b>${never ? '' : `<span class="meta">${esc(neglected.brand)} ${esc(neglected.model)} · ${relDays(lastWorn(neglected))}</span>`}</div>
@@ -467,8 +486,43 @@ function openForm(id = null) {
   $('#photoInput').value = '';
   setPhotoPreview(w.photo || '');
   $('#delBtn').hidden = !id;
+  $('#wearSection').hidden = !id;
+  $('#wearDate').value = today();
+  renderWearHistory();
   dlg.showModal();
 }
+
+// Historia noszenia edytowanego zegarka: usuwanie pomyłek i dopisywanie zapomnianych dni.
+function renderWearHistory() {
+  const w = editingId && watches.find(x => x.id === editingId);
+  if (!w) return;
+  const days = w.wears.slice().sort().reverse();
+  $('#wearTitle').textContent = `Historia noszenia (${days.length})`;
+  $('#wearList').innerHTML = days.length
+    ? days.map(d => `<span class="wear-chip">${fmtDate(d)}<button type="button" data-unwear="${d}" aria-label="Usuń ${fmtDate(d)}">✕</button></span>`).join('')
+    : '<span class="meta">Brak zapisanych dni.</span>';
+  $('#wearDate').max = today();
+}
+
+$('#wearList').addEventListener('click', e => {
+  const b = e.target.closest('[data-unwear]');
+  if (!b) return;
+  const w = watches.find(x => x.id === editingId), d = b.dataset.unwear;
+  w.wears = w.wears.filter(x => x !== d);
+  cloudWear(w.id, d, false);
+  save(); renderAll(); toast(`Usunięto: ${fmtDate(d)}`);
+});
+
+$('#wearAddBtn').addEventListener('click', () => {
+  const w = watches.find(x => x.id === editingId), d = $('#wearDate').value;
+  if (!d) return toast('Wybierz dzień');
+  if (d > today()) return toast('Nie można dodać dnia z przyszłości');
+  if (w.wears.includes(d)) return toast('Ten dzień jest już zapisany');
+  w.wears.push(d);
+  if (d < meta.since) { meta.since = d; cloudDo(() => cloud.fs.setDoc(cloud.fs.doc(cloud.db, 'users', cloud.user.uid), { since: meta.since })); }
+  cloudWear(w.id, d, true);
+  save(); renderAll(); toast(`Dodano: ${fmtDate(d)}`);
+});
 
 function setPhotoPreview(src) {
   pendingPhoto = src;
@@ -749,6 +803,7 @@ async function replaceCloud() {
 
 function renderAll() {
   renderList(); renderStats();
+  if (dlg.open) renderWearHistory();
   $('#version').textContent = `Wersja ${APP_VERSION}`;
   $('#sinceInfo').textContent = `Historia liczona od: ${fmtDate(meta.since)}`;
 }
