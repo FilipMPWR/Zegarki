@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Noszę dziś">
+<meta name="theme-color" content="#f6f4ef" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="noszenie.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<title>Noszę dziś</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --surface: #ffffff;
+    --text: #1d1c1a;
+    --muted: #6f6b63;
+    --line: #e4e0d6;
+    --accent: #8a6d3b;
+    --accent-soft: #f1eadb;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.05);
+    --serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+    --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121212;
+      --surface: #1c1b19;
+      --text: #ece8df;
+      --muted: #9d978b;
+      --line: #2e2c28;
+      --accent: #c9a56a;
+      --accent-soft: #2a251c;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  [hidden] { display: none !important; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 var(--sans);
+    padding: calc(env(safe-area-inset-top) + 20px) 16px calc(env(safe-area-inset-bottom) + 24px);
+    -webkit-user-select: none; user-select: none;
+  }
+  .wrap { max-width: 560px; margin: 0 auto; }
+  header { margin-bottom: 18px; }
+  .date { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  h1 { font: 600 2.2rem/1.1 var(--serif); margin: 4px 0 0; }
+  .today { color: var(--muted); font-size: .9rem; margin-top: 6px; min-height: 1.3em; }
+
+  .list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .item {
+    display: flex; align-items: center; gap: 14px; padding: 10px 12px 10px 10px;
+    background: var(--surface); border-radius: 16px; box-shadow: var(--shadow);
+    border: 2px solid transparent; transition: border-color .2s;
+  }
+  .item.on { border-color: var(--accent); }
+  .thumb {
+    width: 64px; height: 64px; border-radius: 12px; flex: none; overflow: hidden;
+    background: var(--accent-soft); display: flex; align-items: center; justify-content: center;
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb svg { width: 30px; height: 30px; color: var(--accent); opacity: .8; }
+  .info { flex: 1; min-width: 0; }
+  .brand { font-size: .68rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .model { font: 600 1.2rem/1.15 var(--serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meta { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+
+  .wear {
+    width: 56px; height: 56px; border-radius: 50%; flex: none; cursor: pointer;
+    border: 1.5px solid var(--line); background: var(--bg); color: var(--muted);
+    display: flex; align-items: center; justify-content: center; transition: transform .12s, background .2s;
+  }
+  .wear:active { transform: scale(.92); }
+  .wear svg { width: 26px; height: 26px; }
+  .item.on .wear { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .center { text-align: center; padding: 64px 16px; color: var(--muted); }
+  .center h2 { font: 600 1.6rem var(--serif); color: var(--text); margin: 16px 0 8px; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-top: 20px;
+    font: 500 1rem var(--sans); padding: 14px 22px; border-radius: 12px; cursor: pointer;
+    background: var(--text); color: var(--bg); border: 0;
+  }
+  .logo { width: 72px; height: 72px; border-radius: 18px; }
+
+  footer { margin-top: 28px; text-align: center; font-size: .78rem; color: var(--muted); }
+  footer a { color: var(--muted); }
+  footer button { background: none; border: 0; color: var(--muted); font: inherit; text-decoration: underline; cursor: pointer; padding: 0; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: .9rem;
+    opacity: 0; transition: .25s; pointer-events: none; max-width: calc(100vw - 32px);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="date" id="date"></div>
+    <h1>Noszę dziś</h1>
+    <div class="today" id="todayLine"></div>
+  </header>
+
+  <!-- Ekran logowania -->
+  <div class="center" id="loginView" hidden>
+    <img class="logo" src="icon-180.png" alt="">
+    <h2>Zaloguj się</h2>
+    <div id="loginText">Użyj konta Google, na którym trzymasz kolekcję.</div>
+    <button class="btn" id="loginBtn">Zaloguj przez Google</button>
+  </div>
+
+  <!-- Lista zegarków -->
+  <div class="list" id="list"></div>
+
+  <footer>
+    <div id="status">Łączenie…</div>
+    <div style="margin-top:6px"><a href="index.html">Pełna wersja (edycja)</a><span id="logoutWrap" hidden> · <button id="logoutBtn">Wyloguj</button></span></div>
+  </footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ===== Ustawienia (te same co w pełnej wersji) ===== */
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyCTIAgJaT9rRadvbUDNFn0ED2jyhsTm4s8',
+  authDomain: 'zegarki-6cb29.firebaseapp.com',
+  projectId: 'zegarki-6cb29',
+  storageBucket: 'zegarki-6cb29.firebasestorage.app',
+  messagingSenderId: '722188125966',
+  appId: '1:722188125966:web:71e0ce4af9ac50c738f95f'
+};
+const ALLOWED_EMAIL = 'filip.hpa@gmail.com';
+const FB_URL = 'https://www.gstatic.com/firebasejs/10.14.1/';
+const CACHE_KEY = 'zegarki.v1'; // ta sama kopia lokalna co w pełnej wersji – pokazuje listę od razu
+
+/* ===== Pomocnicze ===== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const today = () => new Date().toLocaleDateString('sv-SE');
+const watchIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><rect x="8" y="1.5" width="8" height="4" rx="1"/><rect x="8" y="18.5" width="8" height="4" rx="1"/><circle cx="12" cy="12" r="6.5"/><path d="M12 8.5V12l2.2 1.6"/></svg>`;
+const checkIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`;
+const plusIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 6v12M6 12h12"/></svg>`;
+
+function relDays(d) {
+  const diff = Math.round((new Date(today()) - new Date(d)) / 86400000);
+  return diff === 0 ? 'dziś' : diff === 1 ? 'wczoraj' : `${diff} dni temu`;
+}
+let toastTimer;
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+/* ===== Stan ===== */
+let watches = [];
+try { watches = JSON.parse(localStorage.getItem(CACHE_KEY) || '[]'); } catch (e) {}
+let loggedIn = false;
+
+/* ===== Widok ===== */
+function render() {
+  const t = today();
+  $('#date').textContent = new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' });
+  const worn = watches.filter(w => (w.wears || []).includes(t));
+  $('#todayLine').textContent = !loggedIn ? '' : worn.length
+    ? 'Dziś: ' + worn.map(w => `${w.brand} ${w.model}`).join(', ')
+    : 'Dotknij przycisku przy zegarku, który dziś nosisz.';
+
+  $('#loginView').hidden = loggedIn;
+  $('#logoutWrap').hidden = !loggedIn;
+  if (!loggedIn) { $('#list').innerHTML = ''; return; }
+  if (!watches.length) {
+    $('#list').innerHTML = `<div class="center">Brak zegarków. Dodaj je w <a href="index.html">pełnej wersji</a>.</div>`;
+    return;
+  }
+  const items = watches.slice().sort((a, b) => (a.brand + a.model).localeCompare(b.brand + b.model, 'pl'));
+  $('#list').innerHTML = items.map(w => {
+    const wears = w.wears || [];
+    const on = wears.includes(t);
+    const last = wears.slice().sort().at(-1);
+    return `
+    <div class="item ${on ? 'on' : ''}">
+      <div class="thumb">${w.photo ? `<img src="${w.photo}" alt="">` : watchIcon}</div>
+      <div class="info">
+        <div class="brand">${esc(w.brand)}</div>
+        <div class="model">${esc(w.model)}</div>
+        <div class="meta">${last ? `${wears.length}× · ostatnio ${relDays(last)}` : 'Jeszcze nienoszony'}</div>
+      </div>
+      <button class="wear" data-id="${esc(w.id)}" aria-pressed="${on}" aria-label="${on ? 'Cofnij noszenie' : 'Noszę dziś'}: ${esc(w.brand)} ${esc(w.model)}">${on ? checkIcon : plusIcon}</button>
+    </div>`;
+  }).join('');
+}
+
+$('#list').addEventListener('click', e => {
+  const b = e.target.closest('.wear');
+  if (b) toggleWear(b.dataset.id);
+});
+
+// Po powrocie do aplikacji (np. następnego dnia) odśwież datę i stan przycisków.
+document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+
+/* ===== Firebase ===== */
+const cloud = {};
+
+function setStatus(text) { $('#status').textContent = text; }
+
+async function init() {
+  render();
+  try {
+    const [appMod, authMod, fs] = await Promise.all([
+      import(FB_URL + 'firebase-app.js'), import(FB_URL + 'firebase-auth.js'), import(FB_URL + 'firebase-firestore.js')
+    ]);
+    const app = appMod.initializeApp(FIREBASE_CONFIG);
+    Object.assign(cloud, { fs, authMod, auth: authMod.getAuth(app) });
+    cloud.db = fs.initializeFirestore(app, {
+      localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() })
+    });
+    authMod.onAuthStateChanged(cloud.auth, onUser);
+  } catch (e) {
+    console.warn(e);
+    setStatus('Brak połączenia z chmurą. Sprawdź internet i otwórz aplikację ponownie.');
+  }
+}
+
+$('#loginBtn').addEventListener('click', async () => {
+  const { GoogleAuthProvider, signInWithPopup } = cloud.authMod || {};
+  if (!signInWithPopup) return toast('Brak połączenia – spróbuj za chwilę');
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account', login_hint: ALLOWED_EMAIL });
+  try {
+    await signInWithPopup(cloud.auth, provider);
+  } catch (e) {
+    console.warn(e);
+    if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
+      $('#loginText').textContent = 'Logowanie nie powiodło się (' + (e.code || e.message) + ').';
+    }
+  }
+});
+$('#logoutBtn').addEventListener('click', () => cloud.authMod.signOut(cloud.auth));
+
+let unsub = null;
+async function onUser(user) {
+  if (unsub) { unsub(); unsub = null; }
+  cloud.user = null; loggedIn = false;
+  if (user && (user.email || '').toLowerCase() !== ALLOWED_EMAIL) {
+    await cloud.authMod.signOut(cloud.auth);
+    toast(`Konto ${user.email} nie ma dostępu`);
+    return;
+  }
+  if (!user) { setStatus('Nie zalogowano'); render(); return; }
+  cloud.user = user; loggedIn = true; render();
+  const { collection, onSnapshot } = cloud.fs;
+  unsub = onSnapshot(collection(cloud.db, 'users', user.uid, 'watches'), { includeMetadataChanges: true }, snap => {
+    watches = snap.docs.map(d => ({ id: d.id, wears: [], photo: '', ...d.data() }));
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(watches)); } catch (e) {}
+    render();
+    setStatus(snap.metadata.hasPendingWrites ? 'Wysyłanie…'
+      : snap.metadata.fromCache ? 'Offline – kliknięcia wyślą się po połączeniu'
+      : '☁︎ Zsynchronizowano');
+  }, e => { console.error(e); setStatus('Błąd: ' + (e.code || e.message)); });
+}
+
+function toggleWear(id) {
+  const w = watches.find(x => x.id === id);
+  if (!w || !cloud.user) return;
+  const t = today();
+  const add = !(w.wears || []).includes(t);
+  // Od razu pokaż zmianę, chmura potwierdzi ją chwilę później.
+  w.wears = add ? [...(w.wears || []), t] : w.wears.filter(d => d !== t);
+  render();
+  toast(add ? `✓ ${w.brand} ${w.model}` : 'Cofnięto');
+  const { doc, updateDoc, arrayUnion, arrayRemove } = cloud.fs;
+  updateDoc(doc(cloud.db, 'users', cloud.user.uid, 'watches', id), { wears: add ? arrayUnion(t) : arrayRemove(t) })
+    .catch(e => { console.error(e); toast('Nie zapisano: ' + (e.code || e.message)); });
+}
+
+init();
+</script>
+</body>
+</html>

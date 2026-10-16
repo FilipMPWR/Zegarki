@@ -69,7 +69,7 @@
   input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
   textarea { resize: vertical; min-height: 80px; }
 
-  .btn {
+  .btn { text-decoration: none;
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
     font: 500 .9rem var(--sans); padding: 10px 16px; border-radius: 10px; cursor: pointer;
     border: 1px solid var(--line); background: var(--surface); color: var(--text); white-space: nowrap;
@@ -197,6 +197,11 @@
         <button class="btn" id="logoutBtn" hidden>Wyloguj</button>
       </div>
       <div class="box">
+        <div class="label">Szybkie klikanie na telefonie</div>
+        <p>Uproszczona wersja tylko do zaznaczania noszenia. Otwórz ją w Safari i dodaj do ekranu początkowego (Udostępnij → „Do ekranu początkowego”).</p>
+        <a class="btn" href="noszenie.html">Otwórz „Noszę dziś”</a>
+      </div>
+      <div class="box">
         <div class="label">Kopia zapasowa</div>
         <p>Plik z całą kolekcją do zachowania u siebie – na wszelki wypadek, także przy włączonej synchronizacji.</p>
         <button class="btn" id="exportBtn">Pobierz kopię (JSON)</button>
@@ -275,7 +280,7 @@ function daysAgo(n) {
   return d.toLocaleDateString('sv-SE');
 }
 
-const APP_VERSION = '2.0';
+const APP_VERSION = '2.1';
 const META_KEY = 'zegarki.meta.v2';
 let watches = load();
 let meta = loadMeta();
@@ -286,14 +291,9 @@ function loadMeta() {
     const raw = localStorage.getItem(META_KEY);
     if (raw) return JSON.parse(raw);
   } catch (e) { console.warn(e); }
-  // Pierwsze uruchomienie tej wersji: jednorazowo zeruje historię noszenia i liczy od dziś.
-  watches.forEach(w => w.wears = []);
+  // Brak zapisanej daty (nowe urządzenie): przyjmij dziś. Po zalogowaniu data przyjdzie z chmury.
   const m = { since: today() };
-  try {
-    localStorage.setItem(KEY, JSON.stringify(watches));
-    localStorage.setItem(META_KEY, JSON.stringify(m));
-    localStorage.removeItem('zegarki.meta.v1');
-  } catch (e) {}
+  try { localStorage.setItem(META_KEY, JSON.stringify(m)); } catch (e) {}
   return m;
 }
 
