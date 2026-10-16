@@ -195,6 +195,11 @@
         <input type="file" id="importFile" accept="application/json,.json">
       </div>
       <div class="box">
+        <div class="label">Historia noszenia</div>
+        <p>Zeruje licznik „Noszę dziś” dla wszystkich zegarków. Zegarki, ceny i zdjęcia zostają bez zmian.</p>
+        <button class="btn danger" id="clearWearsBtn">Wyzeruj historię noszenia</button>
+      </div>
+      <div class="box">
         <div class="label">Reset</div>
         <p>Usuwa wszystkie dane i przywraca przykładowe zegarki.</p>
         <button class="btn danger" id="resetBtn">Przywróć przykłady</button>
@@ -247,17 +252,16 @@ function daysAgo(n) {
 
 // Przykładowe pozycje – ceny i daty są orientacyjne, do edycji.
 function sampleData() {
-  const mk = (brand, model, ref, date, price, notes, wearDays) => ({
-    id: uid(), brand, model, ref, date, price, notes, photo: '',
-    wears: wearDays.map(daysAgo)
+  const mk = (brand, model, ref, date, price, notes) => ({
+    id: uid(), brand, model, ref, date, price, notes, photo: '', wears: []
   });
   return [
-    mk('Rolex', 'Submariner Date', '126610LN', '2021-05-14', 52000, 'Czarna tarcza i ceramiczny bezel. Na co dzień.', [1, 4, 8, 12, 15, 22, 30]),
-    mk('Rolex', 'Explorer II „Polar”', '226570', '2022-09-03', 48000, 'Biała tarcza, pomarańczowa wskazówka GMT. Idealny w podróż.', [2, 9, 18, 26]),
-    mk('Omega', 'Speedmaster Professional Moonwatch', '310.30.42.50.01.001', '2020-11-20', 31000, 'Ręczny naciąg, kaliber 3861.', [3, 11, 20]),
-    mk('IWC', 'Portugieser Chronograph', 'IW371605', '2019-06-01', 36000, 'Klasyka do garnituru.', [6, 25]),
-    mk('TAG Heuer', 'Monaco', 'CBL2111.FC6453', '2023-03-18', 28000, 'Kwadratowa koperta, niebieska tarcza.', [14]),
-    mk('Chopard', 'Alpine Eagle 41', '298600-3001', '2024-02-10', 60000, 'Stal Lucent A223, tarcza „Aletsch Blue”.', [5, 19])
+    mk('Rolex', 'Submariner Date', '126610LN', '2021-05-14', 52000, 'Czarna tarcza i ceramiczny bezel. Na co dzień.'),
+    mk('Rolex', 'Explorer II „Polar”', '226570', '2022-09-03', 48000, 'Biała tarcza, pomarańczowa wskazówka GMT. Idealny w podróż.'),
+    mk('Omega', 'Speedmaster Professional Moonwatch', '310.30.42.50.01.001', '2020-11-20', 31000, 'Ręczny naciąg, kaliber 3861.'),
+    mk('IWC', 'Portugieser Chronograph', 'IW371605', '2019-06-01', 36000, 'Klasyka do garnituru.'),
+    mk('TAG Heuer', 'Monaco', 'CBL2111.FC6453', '2023-03-18', 28000, 'Kwadratowa koperta, niebieska tarcza.'),
+    mk('Chopard', 'Alpine Eagle 41', '298600-3001', '2024-02-10', 60000, 'Stal Lucent A223, tarcza „Aletsch Blue”.')
   ];
 }
 
@@ -314,7 +318,8 @@ function renderList() {
     .sort((a, b) => (a.brand + a.model).localeCompare(b.brand + b.model, 'pl'));
 
   const total = watches.reduce((s, w) => s + (Number(w.price) || 0), 0);
-  $('#summary').textContent = `${watches.length} ${plural(watches.length, 'zegarek', 'zegarki', 'zegarków')}` + (total ? ` · ${fmtPrice(total)}` : '');
+  const count = q ? `Znaleziono ${items.length} z ${watches.length}` : `${watches.length} ${plural(watches.length, 'zegarek', 'zegarki', 'zegarków')}`;
+  $('#summary').textContent = `${count} · łączna wartość ${fmtPrice(total)}`;
 
   if (!items.length) {
     $('#grid').innerHTML = `<div class="empty">${watches.length ? 'Nic nie pasuje do wyszukiwania.' : 'Kolekcja jest pusta. Dodaj pierwszy zegarek.'}</div>`;
@@ -511,6 +516,12 @@ $('#importFile').addEventListener('change', async e => {
     save(); renderAll(); toast('Wczytano kopię');
   } catch { toast('To nie jest prawidłowy plik kopii'); }
   e.target.value = '';
+});
+
+$('#clearWearsBtn').addEventListener('click', () => {
+  if (!confirm('Wyzerować historię noszenia wszystkich zegarków? Tej operacji nie można cofnąć.')) return;
+  watches.forEach(w => w.wears = []);
+  save(); renderAll(); toast('Historia noszenia wyzerowana');
 });
 
 $('#resetBtn').addEventListener('click', () => {
