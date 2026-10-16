@@ -65,9 +65,12 @@
   }
   .item.on { border-color: var(--accent); }
   .thumb {
-    width: 64px; height: 64px; border-radius: 12px; flex: none; overflow: hidden;
+    width: 64px; height: 64px; border-radius: 12px; flex: none; overflow: hidden; position: relative;
     background: var(--accent-soft); display: flex; align-items: center; justify-content: center;
+    border: 0; padding: 0; cursor: pointer;
   }
+  .thumb .count { position: absolute; right: 3px; bottom: 3px; background: rgba(0,0,0,.6); color: #fff;
+    font: 600 .62rem var(--sans); padding: 1px 5px; border-radius: 999px; }
   .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .thumb svg { width: 30px; height: 30px; color: var(--accent); opacity: .8; }
   .info { flex: 1; min-width: 0; }
@@ -129,6 +132,7 @@
     <div style="margin-top:6px"><a href="index.html">Pełna wersja (edycja)</a><span id="logoutWrap" hidden> · <button id="logoutBtn">Wyloguj</button></span></div>
   </footer>
 </div>
+<script src="zdjecia.js"></script>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -163,6 +167,26 @@ function toast(msg) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
 }
 
+/* ===== Zdjęcia ===== */
+// Stare pole „photo” (jedno zdjęcie) traktujemy jak listę z jednym zdjęciem.
+function photosOf(w) {
+  if (w.photos && w.photos.length) return w.photos;
+  return w.photo ? [{ id: 'legacy', thumb: w.photo, legacy: true }] : [];
+}
+const srcCache = {};
+async function fullSrc(w, p) {
+  if (p.src) return p.src;
+  if (p.legacy) return w.photo;
+  if (srcCache[p.id]) return srcCache[p.id];
+  const snap = await cloud.fs.getDoc(cloud.fs.doc(cloud.db, 'users', cloud.user.uid, 'photos', p.id));
+  if (!snap.exists()) throw new Error('Brak zdjęcia');
+  return srcCache[p.id] = snap.data().src;
+}
+function openGallery(id) {
+  const w = watches.find(x => x.id === id);
+  Zdjecia.gallery(photosOf(w).map(p => ({ thumb: p.thumb, load: () => fullSrc(w, p) })), 0, `${w.brand} ${w.model}`);
+}
+
 /* ===== Stan ===== */
 let watches = [];
 try { watches = JSON.parse(localStorage.getItem(CACHE_KEY) || '[]'); } catch (e) {}
@@ -191,7 +215,9 @@ function render() {
     const last = wears.slice().sort().at(-1);
     return `
     <div class="item ${on ? 'on' : ''}">
-      <div class="thumb">${w.photo ? `<img src="${w.photo}" alt="">` : watchIcon}</div>
+      ${(() => { const ph = photosOf(w); return ph.length
+        ? `<button class="thumb" data-gallery="${esc(w.id)}" aria-label="Zdjęcia: ${esc(w.brand)} ${esc(w.model)}"><img src="${ph[0].thumb}" alt="">${ph.length > 1 ? `<span class="count">${ph.length}</span>` : ''}</button>`
+        : `<div class="thumb">${watchIcon}</div>`; })()}
       <div class="info">
         <div class="brand">${esc(w.brand)}</div>
         <div class="model">${esc(w.model)}</div>
@@ -204,7 +230,9 @@ function render() {
 
 $('#list').addEventListener('click', e => {
   const b = e.target.closest('.wear');
+  const g = e.target.closest('[data-gallery]');
   if (b) toggleWear(b.dataset.id);
+  else if (g) openGallery(g.dataset.gallery);
 });
 
 // Po powrocie do aplikacji (np. następnego dnia) odśwież datę i stan przycisków.

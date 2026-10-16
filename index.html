@@ -81,15 +81,17 @@
   .btn.danger { color: var(--danger); }
   .btn.small { padding: 7px 12px; font-size: .82rem; }
 
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
   .card {
     background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
     overflow: hidden; display: flex; flex-direction: column;
   }
   .photo {
-    aspect-ratio: 4 / 3; background: var(--accent-soft); display: flex; align-items: center; justify-content: center;
-    cursor: pointer;
+    aspect-ratio: 1 / 1; background: var(--accent-soft); display: flex; align-items: center; justify-content: center;
+    cursor: pointer; position: relative; border: 0; padding: 0; width: 100%;
   }
+  .photo .count { position: absolute; right: 8px; bottom: 8px; background: rgba(0,0,0,.55); color: #fff;
+    font: 600 .72rem var(--sans); padding: 3px 8px; border-radius: 999px; }
   .photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .photo svg { width: 64px; height: 64px; color: var(--accent); opacity: .7; }
   .body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
@@ -141,9 +143,19 @@
   dialog h2 { font: 600 1.6rem var(--serif); margin: 0 0 4px; }
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   label.f { display: grid; gap: 4px; font-size: .8rem; color: var(--muted); font-weight: 500; }
-  .photo-edit { display: flex; gap: 12px; align-items: center; }
-  .photo-edit .prev { width: 72px; height: 72px; border-radius: 12px; background: var(--accent-soft); overflow: hidden; flex: none; }
-  .photo-edit .prev img { width: 100%; height: 100%; object-fit: cover; }
+  .ph-edit { display: grid; gap: 8px; }
+  .ph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+  .ph-tile { display: grid; gap: 4px; }
+  .ph-img { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--accent-soft); }
+  .ph-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ph-main { position: absolute; left: 4px; top: 4px; background: var(--accent); color: #fff; font: 600 .62rem var(--sans);
+    letter-spacing: .06em; text-transform: uppercase; padding: 2px 6px; border-radius: 999px; }
+  .ph-btns { display: flex; gap: 4px; }
+  .ph-btns button { flex: 1; font: 500 .72rem var(--sans); padding: 6px 0; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--surface); color: var(--text); cursor: pointer; }
+  .ph-btns button.del { color: var(--danger); flex: 0 0 30px; }
+  .ph-add { cursor: pointer; }
+  .ph-add input { display: none; }
   .wear-edit { display: grid; gap: 8px; padding-top: 4px; border-top: 1px solid var(--line); }
   .wear-list { display: flex; flex-wrap: wrap; gap: 6px; }
   .wear-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--accent-soft); color: var(--text);
@@ -167,8 +179,15 @@
     .row { grid-template-columns: 1fr; }
     .kpis { grid-template-columns: 1fr 1fr; }
     .kpis .kpi:last-child { grid-column: 1 / -1; }
-    .grid { grid-template-columns: 1fr; }
-    .photo { aspect-ratio: 16 / 9; }
+    .grid { grid-template-columns: 1fr; gap: 10px; }
+    /* Na telefonie: miniatura po lewej, opis po prawej */
+    .card { flex-direction: row; }
+    .card .photo { width: 112px; flex: none; align-self: flex-start; margin: 12px 0 12px 12px; border-radius: 12px; overflow: hidden; }
+    .card .photo svg { width: 40px; height: 40px; }
+    .card .body { padding: 12px 14px 14px; min-width: 0; }
+    .card .model { font-size: 1.2rem; }
+    .actions { margin-top: 8px; }
+    .actions .btn { padding: 8px 12px; font-size: .82rem; }
   }
 </style>
 </head>
@@ -236,12 +255,10 @@
 <dialog id="dlg">
   <form method="dialog" id="form">
     <h2 id="dlgTitle">Nowy zegarek</h2>
-    <div class="photo-edit">
-      <div class="prev" id="photoPrev"></div>
-      <div style="display:grid;gap:6px;flex:1">
-        <input type="file" id="photoInput" accept="image/*" aria-label="Zdjęcie">
-        <button type="button" class="btn small" id="photoClear" hidden>Usuń zdjęcie</button>
-      </div>
+    <div class="ph-edit">
+      <div class="label" id="phTitle">Zdjęcia</div>
+      <div class="ph-grid" id="phGrid"></div>
+      <label class="btn small ph-add" id="phAdd">+ Dodaj zdjęcia<input type="file" id="phInput" accept="image/*" multiple></label>
     </div>
     <div class="row">
       <label class="f">Marka<input name="brand" required autocomplete="off"></label>
@@ -284,6 +301,7 @@
 
 <p class="version" id="version"></p>
 
+<script src="zdjecia.js"></script>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -297,7 +315,7 @@ function daysAgo(n) {
   return d.toLocaleDateString('sv-SE');
 }
 
-const APP_VERSION = '2.2';
+const APP_VERSION = '2.3';
 const META_KEY = 'zegarki.meta.v2';
 let watches = load();
 let meta = loadMeta();
@@ -322,13 +340,13 @@ function load() {
   return []; // nowa osoba: pusta kolekcja, bez żadnych przykładów
 }
 
-function save() {
+function save(quiet = false) {
   try {
     localStorage.setItem(KEY, JSON.stringify(watches));
     localStorage.setItem(META_KEY, JSON.stringify(meta));
     return true;
   } catch (e) {
-    toast('Brak miejsca w pamięci przeglądarki – spróbuj mniejszego zdjęcia.');
+    if (!quiet) toast('Brak miejsca w pamięci przeglądarki – zaloguj się, aby zdjęcia trzymać w chmurze.');
     return false;
   }
 }
@@ -339,6 +357,28 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const fmtPrice = v => v || v === 0 ? new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN', maximumFractionDigits: 0 }).format(v) : '';
 const fmtDate = s => s ? new Date(s + 'T12:00').toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
 const watchIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><rect x="8" y="1.5" width="8" height="4" rx="1"/><rect x="8" y="18.5" width="8" height="4" rx="1"/><circle cx="12" cy="12" r="6.5"/><path d="M12 8.5V12l2.2 1.6"/></svg>`;
+
+// Lista zdjęć zegarka. Stare pole „photo” (jedno zdjęcie, wersje do 2.2) traktujemy jak jedno zdjęcie.
+function photosOf(w) {
+  if (w.photos && w.photos.length) return w.photos;
+  return w.photo ? [{ id: 'legacy', thumb: w.photo, legacy: true }] : [];
+}
+const mainThumb = w => photosOf(w)[0]?.thumb || '';
+const srcCache = {};
+// Pełne zdjęcie: z pamięci, ze starego pola albo z chmury (pobierane dopiero, gdy potrzebne).
+async function fullSrc(w, p) {
+  if (p.src) return p.src;
+  if (p.legacy) return w.photo;
+  if (srcCache[p.id]) return srcCache[p.id];
+  if (!cloud.user) throw new Error('Brak połączenia z chmurą');
+  const snap = await cloud.fs.getDoc(cloud.fs.doc(cloud.db, 'users', cloud.user.uid, 'photos', p.id));
+  if (!snap.exists()) throw new Error('Brak zdjęcia');
+  return srcCache[p.id] = snap.data().src;
+}
+function openGallery(id, start = 0) {
+  const w = watches.find(x => x.id === id);
+  Zdjecia.gallery(photosOf(w).map(p => ({ thumb: p.thumb, load: () => fullSrc(w, p) })), start, `${w.brand} ${w.model}`);
+}
 
 function lastWorn(w) {
   return w.wears.length ? w.wears.slice().sort().at(-1) : null;
@@ -377,7 +417,9 @@ function renderList() {
     const wornToday = w.wears.includes(t);
     return `
     <article class="card">
-      <div class="photo" data-edit="${w.id}">${w.photo ? `<img src="${w.photo}" alt="">` : watchIcon}</div>
+      ${(() => { const ph = photosOf(w); return ph.length
+        ? `<button class="photo" data-gallery="${w.id}" aria-label="Zdjęcia: ${esc(w.brand)} ${esc(w.model)}"><img src="${ph[0].thumb}" alt="">${ph.length > 1 ? `<span class="count">${ph.length} ${plural(ph.length, 'zdjęcie', 'zdjęcia', 'zdjęć')}</span>` : ''}</button>`
+        : `<button class="photo" data-edit="${w.id}" aria-label="Dodaj zdjęcie">${watchIcon}</button>`; })()}
       <div class="body">
         <div class="brand">${esc(w.brand)}</div>
         <div class="model">${esc(w.model)}</div>
@@ -401,7 +443,9 @@ function plural(n, one, few, many) {
 $('#grid').addEventListener('click', e => {
   const wear = e.target.closest('[data-wear]');
   const edit = e.target.closest('[data-edit]');
-  if (wear) toggleWear(wear.dataset.wear);
+  const galleryBtn = e.target.closest('[data-gallery]');
+  if (galleryBtn) openGallery(galleryBtn.dataset.gallery);
+  else if (wear) toggleWear(wear.dataset.wear);
   else if (edit) openForm(edit.dataset.edit);
 });
 $('#search').addEventListener('input', renderList);
@@ -446,7 +490,7 @@ function renderStats() {
 
   el.innerHTML = `${sinceLine()}
     <div class="stat-top">
-      <div class="thumb">${top.photo ? `<img src="${top.photo}" alt="">` : watchIcon}</div>
+      <div class="thumb">${mainThumb(top) ? `<img src="${mainThumb(top)}" alt="">` : watchIcon}</div>
       <div>
         <div class="label">Noszony najczęściej</div>
         <div class="model">${esc(top.brand)} ${esc(top.model)}</div>
@@ -471,7 +515,7 @@ function renderStats() {
 
 /* ===== Formularz ===== */
 const dlg = $('#dlg'), form = $('#form');
-let editingId = null, pendingPhoto = '';
+let editingId = null, pendingPhotos = [];
 
 function openForm(id = null) {
   editingId = id;
@@ -483,8 +527,15 @@ function openForm(id = null) {
   form.date.value = w.date || '';
   form.price.value = w.price ?? '';
   form.notes.value = w.notes || '';
-  $('#photoInput').value = '';
-  setPhotoPreview(w.photo || '');
+  // Kopia robocza zdjęć – zmiany trafią do zegarka dopiero po „Zapisz”.
+  pendingPhotos = photosOf(w).map(p => ({ ...p }));
+  const legacy = pendingPhotos.find(p => p.legacy);
+  if (legacy) {
+    // Stare zdjęcie: zamień na nowy format z kadrem (środek), żeby dało się ustawić celownik.
+    Object.assign(legacy, { id: uid(), src: w.photo, crop: { z: 1, x: 0, y: 0 }, isNew: true, legacy: false });
+    Zdjecia.makeThumb(legacy.src, legacy.crop).then(t => { legacy.thumb = t; renderPhotoEditor(); });
+  }
+  renderPhotoEditor();
   $('#delBtn').hidden = !id;
   $('#wearSection').hidden = !id;
   $('#wearDate').value = today();
@@ -524,37 +575,51 @@ $('#wearAddBtn').addEventListener('click', () => {
   save(); renderAll(); toast(`Dodano: ${fmtDate(d)}`);
 });
 
-function setPhotoPreview(src) {
-  pendingPhoto = src;
-  $('#photoPrev').innerHTML = src ? `<img src="${src}" alt="">` : '';
-  $('#photoClear').hidden = !src;
+function renderPhotoEditor() {
+  const n = pendingPhotos.length;
+  $('#phTitle').textContent = `Zdjęcia (${n}/${Zdjecia.MAX_PHOTOS})`;
+  $('#phAdd').hidden = n >= Zdjecia.MAX_PHOTOS;
+  $('#phGrid').innerHTML = pendingPhotos.map((p, i) => `
+    <div class="ph-tile">
+      <div class="ph-img">${p.thumb ? `<img src="${p.thumb}" alt="">` : ''}${i === 0 ? '<span class="ph-main">Główne</span>' : ''}</div>
+      <div class="ph-btns">
+        ${i > 0 ? `<button type="button" data-ph="main" data-i="${i}" title="Ustaw jako główne">★</button>` : ''}
+        <button type="button" data-ph="crop" data-i="${i}">Kadr</button>
+        <button type="button" class="del" data-ph="del" data-i="${i}" aria-label="Usuń zdjęcie">✕</button>
+      </div>
+    </div>`).join('');
 }
 
-// Zmniejsza zdjęcie do max 800 px i kompresuje do JPEG, żeby zmieściło się w pamięci przeglądarki.
-function resizeImage(file, maxSize = 800) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
-      const c = document.createElement('canvas');
-      c.width = Math.round(img.width * scale);
-      c.height = Math.round(img.height * scale);
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(img.src);
-      resolve(c.toDataURL('image/jpeg', 0.8));
-    };
-    img.onerror = reject;
-    img.src = URL.createObjectURL(file);
-  });
-}
-
-$('#photoInput').addEventListener('change', async e => {
-  const f = e.target.files[0];
-  if (!f) return;
-  try { setPhotoPreview(await resizeImage(f)); }
-  catch { toast('Nie udało się wczytać zdjęcia'); }
+$('#phGrid').addEventListener('click', async e => {
+  const b = e.target.closest('[data-ph]');
+  if (!b) return;
+  const i = +b.dataset.i, p = pendingPhotos[i];
+  if (b.dataset.ph === 'main') pendingPhotos.unshift(...pendingPhotos.splice(i, 1));
+  else if (b.dataset.ph === 'del') pendingPhotos.splice(i, 1);
+  else if (b.dataset.ph === 'crop') {
+    let src;
+    try { src = p.src || await fullSrc(watches.find(x => x.id === editingId) || {}, p); }
+    catch { return toast('Pełne zdjęcie niedostępne – sprawdź internet'); }
+    const r = await Zdjecia.crop(src, p.crop);
+    if (r) Object.assign(p, r);
+  }
+  renderPhotoEditor();
 });
-$('#photoClear').addEventListener('click', () => { setPhotoPreview(''); $('#photoInput').value = ''; });
+
+$('#phInput').addEventListener('change', async e => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  for (const f of files) {
+    if (pendingPhotos.length >= Zdjecia.MAX_PHOTOS) { toast(`Maksymalnie ${Zdjecia.MAX_PHOTOS} zdjęć na zegarek`); break; }
+    let src;
+    try { src = await Zdjecia.fileToFull(f); } catch { toast(`Nie udało się wczytać: ${f.name}`); continue; }
+    const r = await Zdjecia.crop(src);  // celownik kadru dla każdego nowego zdjęcia
+    if (!r) continue;
+    pendingPhotos.push({ id: uid(), src, isNew: true, ...r });
+    renderPhotoEditor();
+  }
+});
+
 $('#cancelBtn').addEventListener('click', () => dlg.close());
 $('#addBtn').addEventListener('click', () => openForm());
 
@@ -567,13 +632,24 @@ form.addEventListener('submit', e => {
     date: form.date.value,
     price: form.price.value === '' ? null : Number(form.price.value),
     notes: form.notes.value.trim(),
-    photo: pendingPhoto
+    photo: ''
   };
+  if (pendingPhotos.some(p => !p.thumb)) return toast('Chwila – przygotowuję miniaturę…');
+  const old = editingId ? photosOf(watches.find(x => x.id === editingId)).filter(p => !p.legacy) : [];
+  const id = editingId || uid();
+  // Po zalogowaniu pełne zdjęcia idą do chmury osobno; w zegarku zostają tylko miniatury i kadr.
+  data.photos = pendingPhotos.map(p => {
+    const o = { id: p.id, thumb: p.thumb, crop: p.crop || { z: 1, x: 0, y: 0 } };
+    if (p.src) { if (cloud.user) srcCache[p.id] = p.src; else o.src = p.src; }
+    return o;
+  });
   const backup = JSON.stringify(watches);
   let w;
   if (editingId) w = Object.assign(watches.find(x => x.id === editingId), data);
-  else watches.push(w = { id: uid(), wears: [], ...data });
+  else watches.push(w = { id, wears: [], ...data });
   if (!save()) { watches = JSON.parse(backup); return; }
+  pendingPhotos.filter(p => p.isNew && p.src).forEach(p => cloudPhotoPut(p.id, id, p.src));
+  old.filter(p => !data.photos.some(n => n.id === p.id)).forEach(p => cloudPhotoDelete(p.id));
   cloudPut(w);
   dlg.close(); renderAll();
   toast(editingId ? 'Zapisano zmiany' : 'Dodano zegarek');
@@ -582,6 +658,7 @@ form.addEventListener('submit', e => {
 $('#delBtn').addEventListener('click', () => {
   const w = watches.find(x => x.id === editingId);
   if (!confirm(`Usunąć ${w.brand} ${w.model}? Tej operacji nie można cofnąć.`)) return;
+  photosOf(w).filter(p => !p.legacy).forEach(p => cloudPhotoDelete(p.id));
   watches = watches.filter(x => x.id !== editingId);
   cloudRemove(editingId);
   save(); dlg.close(); renderAll();
@@ -589,8 +666,14 @@ $('#delBtn').addEventListener('click', () => {
 });
 
 /* ===== Kopia zapasowa ===== */
-$('#exportBtn').addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify({ since: meta.since, watches }, null, 2)], { type: 'application/json' });
+$('#exportBtn').addEventListener('click', async () => {
+  toast('Przygotowuję kopię ze zdjęciami…');
+  let missing = 0;
+  const full = await Promise.all(watches.map(async w => ({ ...w, photos: await Promise.all((w.photos || []).map(async p => {
+    try { return { ...p, src: await fullSrc(w, p) }; } catch { missing++; return p; }
+  })) })));
+  if (missing) toast(`${missing} pełnych zdjęć niedostępnych – w kopii będą tylko miniatury`);
+  const blob = new Blob([JSON.stringify({ since: meta.since, watches: full }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `zegarki-${today()}.json`;
@@ -607,9 +690,11 @@ $('#importFile').addEventListener('change', async e => {
     const data = Array.isArray(parsed) ? parsed : parsed.watches;
     if (!Array.isArray(data)) throw new Error();
     if (!confirm(`Wczytać ${data.length} pozycji i zastąpić obecne dane?`)) return;
-    watches = data.map(w => ({ id: w.id || uid(), wears: [], photo: '', ...w }));
+    watches = data.map(w => ({ id: w.id || uid(), wears: [], photo: '', photos: [], ...w }));
     meta.since = parsed.since || watches.flatMap(w => w.wears).sort()[0] || today();
-    save(); cloudReplaceAll(); renderAll(); toast('Wczytano kopię');
+    if (cloud.user) { toast('Wysyłam kopię do chmury…'); await replaceCloud(); }
+    if (!save() && !cloud.user) return;
+    renderAll(); toast('Wczytano kopię');
   } catch { toast('To nie jest prawidłowy plik kopii'); }
   e.target.value = '';
 });
@@ -750,7 +835,7 @@ function askSyncChoice(remoteCount) {
 }
 
 function sameData(a, b) {
-  const norm = list => JSON.stringify(list.map(w => [w.id, w.brand, w.model, w.ref || '', w.date || '', w.price ?? null, w.notes || '', w.photo || '', (w.wears || []).slice().sort()])
+  const norm = list => JSON.stringify(list.map(w => [w.id, w.brand, w.model, w.ref || '', w.date || '', w.price ?? null, w.notes || '', w.photo || '', photosOf(w).map(p => p.id + p.thumb.length).join(), (w.wears || []).slice().sort()])
     .sort((x, y) => x[0].localeCompare(y[0])));
   return norm(a) === norm(b);
 }
@@ -759,8 +844,8 @@ function sameData(a, b) {
 function listen(u) {
   const { collection, doc, onSnapshot } = cloud.fs;
   cloud.unsub.push(onSnapshot(collection(cloud.db, 'users', u, 'watches'), { includeMetadataChanges: true }, snap => {
-    watches = snap.docs.map(d => ({ id: d.id, wears: [], photo: '', ...d.data() }));
-    save(); renderAll();
+    watches = snap.docs.map(d => ({ id: d.id, wears: [], photo: '', photos: [], ...d.data() }));
+    save(true); renderAll();
     if (snap.metadata.hasPendingWrites) setSyncStatus(navigator.onLine ? 'Wysyłanie zmian…' : 'Offline – zmiany wyślą się po połączeniu');
     else if (snap.metadata.fromCache) setSyncStatus('Offline – pokazuję ostatnio pobrane dane');
     else setSyncStatus(`Zalogowano jako ${cloud.user?.email}. Zmiany synchronizują się automatycznie.`, true);
@@ -772,11 +857,16 @@ function listen(u) {
 
 const watchRef = id => cloud.fs.doc(cloud.db, 'users', cloud.user.uid, 'watches', id);
 const withoutId = ({ id, ...rest }) => rest;
+// Dokument zegarka w chmurze: bez pełnych zdjęć (te są w osobnych dokumentach, limit 1 MB na dokument).
+const watchDoc = w => ({ ...withoutId(w), photos: (w.photos || []).map(({ src, ...p }) => p) });
+const photoRef = id => cloud.fs.doc(cloud.db, 'users', cloud.user.uid, 'photos', id);
+function cloudPhotoPut(id, watchId, src) { cloudDo(() => cloud.fs.setDoc(photoRef(id), { watchId, src })); }
+function cloudPhotoDelete(id) { cloudDo(() => cloud.fs.deleteDoc(photoRef(id))); }
 function cloudDo(fn) {
   if (!cloud.user) return;
   Promise.resolve().then(fn).catch(e => { console.error(e); toast('Nie udało się zapisać w chmurze: ' + (e.code || e.message)); });
 }
-function cloudPut(w) { cloudDo(() => cloud.fs.setDoc(watchRef(w.id), withoutId(w))); }
+function cloudPut(w) { cloudDo(() => cloud.fs.setDoc(watchRef(w.id), watchDoc(w))); }
 function cloudRemove(id) { cloudDo(() => cloud.fs.deleteDoc(watchRef(id))); }
 function cloudWear(id, date, add) {
   const { updateDoc, arrayUnion, arrayRemove } = cloud.fs || {};
@@ -789,10 +879,20 @@ async function replaceCloud() {
   const { collection, doc, getDocs, writeBatch } = cloud.fs;
   const u = cloud.user.uid;
   const existing = await getDocs(collection(cloud.db, 'users', u, 'watches'));
+  // Pełne zdjęcia trzymane dotąd lokalnie: wyślij do chmury (każde osobno – są duże).
+  for (const w of watches) for (const p of (w.photos || [])) {
+    if (!p.src) continue;
+    await cloud.fs.setDoc(photoRef(p.id), { watchId: w.id, src: p.src });
+    srcCache[p.id] = p.src; delete p.src;
+  }
   const ops = [];
   const keep = new Set(watches.map(w => w.id));
-  existing.docs.forEach(d => { if (!keep.has(d.id)) ops.push(b => b.delete(d.ref)); });
-  watches.forEach(w => ops.push(b => b.set(watchRef(w.id), withoutId(w))));
+  const keepPhotos = new Set(watches.flatMap(w => (w.photos || []).map(p => p.id)));
+  existing.docs.forEach(d => {
+    if (!keep.has(d.id)) ops.push(b => b.delete(d.ref));
+    (d.data().photos || []).forEach(p => { if (!keepPhotos.has(p.id)) ops.push(b => b.delete(photoRef(p.id))); });
+  });
+  watches.forEach(w => ops.push(b => b.set(watchRef(w.id), watchDoc(w))));
   ops.push(b => b.set(doc(cloud.db, 'users', u), { since: meta.since }));
   for (let i = 0; i < ops.length; i += 400) {
     const batch = writeBatch(cloud.db);
