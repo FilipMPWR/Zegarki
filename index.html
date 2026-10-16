@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#f6f4ef" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
+<title>Kolekcja zegarków</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --surface: #ffffff;
+    --text: #1d1c1a;
+    --muted: #6f6b63;
+    --line: #e4e0d6;
+    --accent: #8a6d3b;
+    --accent-soft: #f1eadb;
+    --danger: #a23b2a;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.05);
+    --radius: 14px;
+    --serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+    --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121212;
+      --surface: #1c1b19;
+      --text: #ece8df;
+      --muted: #9d978b;
+      --line: #2e2c28;
+      --accent: #c9a56a;
+      --accent-soft: #2a251c;
+      --danger: #e07a68;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 var(--sans);
+    padding: env(safe-area-inset-top) 0 calc(80px + env(safe-area-inset-bottom));
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 16px; }
+
+  header { padding: 32px 0 8px; }
+  h1 { font: 600 2.2rem/1.1 var(--serif); margin: 0; letter-spacing: .01em; }
+  .sub { color: var(--muted); margin: 6px 0 0; font-size: .9rem; }
+
+  nav.tabs { display: flex; gap: 4px; margin: 20px 0 16px; border-bottom: 1px solid var(--line); }
+  nav.tabs button {
+    background: none; border: 0; padding: 10px 14px; font: 500 .95rem var(--sans);
+    color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  nav.tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+
+  .toolbar { display: flex; gap: 8px; margin-bottom: 16px; }
+  .toolbar input[type=search] { flex: 1; min-width: 0; }
+
+  input, textarea, select {
+    width: 100%; font: 16px var(--sans); color: var(--text); background: var(--surface);
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+  }
+  input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  textarea { resize: vertical; min-height: 80px; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    font: 500 .9rem var(--sans); padding: 10px 16px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--surface); color: var(--text); white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--muted); }
+  .btn.primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .btn.accent { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+  .btn.accent.on { background: var(--accent); color: #fff; }
+  .btn.danger { color: var(--danger); }
+  .btn.small { padding: 7px 12px; font-size: .82rem; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+    overflow: hidden; display: flex; flex-direction: column;
+  }
+  .photo {
+    aspect-ratio: 4 / 3; background: var(--accent-soft); display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .photo svg { width: 64px; height: 64px; color: var(--accent); opacity: .7; }
+  .body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+  .brand { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .model { font: 600 1.35rem/1.15 var(--serif); }
+  .meta { color: var(--muted); font-size: .82rem; }
+  .worn { font-size: .8rem; color: var(--muted); margin-top: 4px; }
+  .actions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+  .actions .btn.accent { flex: 1; }
+
+  .empty { text-align: center; color: var(--muted); padding: 48px 16px; }
+
+  /* Statystyki */
+  .stat-top {
+    background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 20px; margin-bottom: 16px; display: flex; gap: 16px; align-items: center;
+  }
+  .stat-top .thumb { width: 72px; height: 72px; border-radius: 12px; background: var(--accent-soft); overflow: hidden; flex: none;
+    display: flex; align-items: center; justify-content: center; }
+  .stat-top .thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .stat-top .thumb svg { width: 36px; height: 36px; color: var(--accent); }
+  .label { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+  .kpi { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px; }
+  .kpi b { display: block; font: 600 1.6rem/1.2 var(--serif); font-variant-numeric: lining-nums; }
+  .bars { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 8px 16px; }
+  .bar-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .bar-row:last-child { border-bottom: 0; }
+  .bar-row .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar-row .count { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .track { grid-column: 1 / -1; height: 6px; background: var(--accent-soft); border-radius: 3px; overflow: hidden; }
+  .fill { height: 100%; background: var(--accent); border-radius: 3px; }
+
+  .settings { display: grid; gap: 12px; max-width: 520px; }
+  .settings .box { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; }
+  .settings p { margin: 4px 0 12px; color: var(--muted); font-size: .88rem; }
+
+  /* Okno edycji */
+  dialog {
+    border: 0; padding: 0; border-radius: 18px; background: var(--surface); color: var(--text);
+    width: min(560px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog form { padding: 20px; display: grid; gap: 12px; }
+  dialog h2 { font: 600 1.6rem var(--serif); margin: 0 0 4px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  label.f { display: grid; gap: 4px; font-size: .8rem; color: var(--muted); font-weight: 500; }
+  .photo-edit { display: flex; gap: 12px; align-items: center; }
+  .photo-edit .prev { width: 72px; height: 72px; border-radius: 12px; background: var(--accent-soft); overflow: hidden; flex: none; }
+  .photo-edit .prev img { width: 100%; height: 100%; object-fit: cover; }
+  .dlg-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; flex-wrap: wrap; }
+  .dlg-actions .spacer { flex: 1; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: .9rem;
+    opacity: 0; transition: .25s; pointer-events: none; max-width: calc(100vw - 32px);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 520px) {
+    h1 { font-size: 1.9rem; }
+    .row { grid-template-columns: 1fr; }
+    .kpis { grid-template-columns: 1fr 1fr; }
+    .kpis .kpi:last-child { grid-column: 1 / -1; }
+    .grid { grid-template-columns: 1fr; }
+    .photo { aspect-ratio: 16 / 9; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Kolekcja zegarków</h1>
+    <p class="sub" id="summary"></p>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="list">Kolekcja</button>
+    <button role="tab" aria-selected="false" data-tab="stats">Statystyki</button>
+    <button role="tab" aria-selected="false" data-tab="settings">Dane</button>
+  </nav>
+
+  <section id="tab-list">
+    <div class="toolbar">
+      <input type="search" id="search" placeholder="Szukaj…" aria-label="Szukaj">
+      <button class="btn primary" id="addBtn">+ Dodaj</button>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section id="tab-stats" hidden></section>
+
+  <section id="tab-settings" hidden>
+    <div class="settings">
+      <div class="box">
+        <div class="label">Kopia zapasowa</div>
+        <p>Dane są zapisane tylko w tej przeglądarce. Regularnie pobieraj kopię, aby ich nie stracić (np. po wyczyszczeniu historii).</p>
+        <button class="btn" id="exportBtn">Pobierz kopię (JSON)</button>
+      </div>
+      <div class="box">
+        <div class="label">Przywracanie</div>
+        <p>Wczytaj wcześniej pobrany plik. Zastąpi on obecne dane.</p>
+        <input type="file" id="importFile" accept="application/json,.json">
+      </div>
+      <div class="box">
+        <div class="label">Reset</div>
+        <p>Usuwa wszystkie dane i przywraca przykładowe zegarki.</p>
+        <button class="btn danger" id="resetBtn">Przywróć przykłady</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<dialog id="dlg">
+  <form method="dialog" id="form">
+    <h2 id="dlgTitle">Nowy zegarek</h2>
+    <div class="photo-edit">
+      <div class="prev" id="photoPrev"></div>
+      <div style="display:grid;gap:6px;flex:1">
+        <input type="file" id="photoInput" accept="image/*" aria-label="Zdjęcie">
+        <button type="button" class="btn small" id="photoClear" hidden>Usuń zdjęcie</button>
+      </div>
+    </div>
+    <div class="row">
+      <label class="f">Marka<input name="brand" required autocomplete="off"></label>
+      <label class="f">Model<input name="model" required autocomplete="off"></label>
+    </div>
+    <div class="row">
+      <label class="f">Referencja<input name="ref" autocomplete="off"></label>
+      <label class="f">Data zakupu<input name="date" type="date"></label>
+    </div>
+    <label class="f">Cena (zł)<input name="price" type="number" min="0" step="1" inputmode="numeric"></label>
+    <label class="f">Notatki<textarea name="notes"></textarea></label>
+    <div class="dlg-actions">
+      <button type="button" class="btn danger" id="delBtn" hidden>Usuń</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn" id="cancelBtn">Anuluj</button>
+      <button type="submit" class="btn primary">Zapisz</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ===== Dane ===== */
+const KEY = 'zegarki.v1';
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+const today = () => new Date().toLocaleDateString('sv-SE'); // format RRRR-MM-DD w lokalnej strefie
+
+function daysAgo(n) {
+  const d = new Date(); d.setDate(d.getDate() - n);
+  return d.toLocaleDateString('sv-SE');
+}
+
+// Przykładowe pozycje – ceny i daty są orientacyjne, do edycji.
+function sampleData() {
+  const mk = (brand, model, ref, date, price, notes, wearDays) => ({
+    id: uid(), brand, model, ref, date, price, notes, photo: '',
+    wears: wearDays.map(daysAgo)
+  });
+  return [
+    mk('Rolex', 'Submariner Date', '126610LN', '2021-05-14', 52000, 'Czarna tarcza i ceramiczny bezel. Na co dzień.', [1, 4, 8, 12, 15, 22, 30]),
+    mk('Rolex', 'Explorer II „Polar”', '226570', '2022-09-03', 48000, 'Biała tarcza, pomarańczowa wskazówka GMT. Idealny w podróż.', [2, 9, 18, 26]),
+    mk('Omega', 'Speedmaster Professional Moonwatch', '310.30.42.50.01.001', '2020-11-20', 31000, 'Ręczny naciąg, kaliber 3861.', [3, 11, 20]),
+    mk('IWC', 'Portugieser Chronograph', 'IW371605', '2019-06-01', 36000, 'Klasyka do garnituru.', [6, 25]),
+    mk('TAG Heuer', 'Monaco', 'CBL2111.FC6453', '2023-03-18', 28000, 'Kwadratowa koperta, niebieska tarcza.', [14]),
+    mk('Chopard', 'Alpine Eagle 41', '298600-3001', '2024-02-10', 60000, 'Stal Lucent A223, tarcza „Aletsch Blue”.', [5, 19])
+  ];
+}
+
+let watches = load();
+
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { console.warn(e); }
+  const data = sampleData();
+  try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {}
+  return data;
+}
+
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(watches));
+    return true;
+  } catch (e) {
+    toast('Brak miejsca w pamięci przeglądarki – spróbuj mniejszego zdjęcia.');
+    return false;
+  }
+}
+
+/* ===== Pomocnicze ===== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtPrice = v => v || v === 0 ? new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN', maximumFractionDigits: 0 }).format(v) : '';
+const fmtDate = s => s ? new Date(s + 'T12:00').toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+const watchIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><rect x="8" y="1.5" width="8" height="4" rx="1"/><rect x="8" y="18.5" width="8" height="4" rx="1"/><circle cx="12" cy="12" r="6.5"/><path d="M12 8.5V12l2.2 1.6"/></svg>`;
+
+function lastWorn(w) {
+  return w.wears.length ? w.wears.slice().sort().at(-1) : null;
+}
+function relDays(dateStr) {
+  const diff = Math.round((new Date(today()) - new Date(dateStr)) / 86400000);
+  if (diff === 0) return 'dziś';
+  if (diff === 1) return 'wczoraj';
+  return `${diff} dni temu`;
+}
+
+let toastTimer;
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+/* ===== Lista ===== */
+function renderList() {
+  const q = $('#search').value.trim().toLowerCase();
+  const items = watches
+    .filter(w => !q || [w.brand, w.model, w.ref, w.notes].join(' ').toLowerCase().includes(q))
+    .sort((a, b) => (a.brand + a.model).localeCompare(b.brand + b.model, 'pl'));
+
+  const total = watches.reduce((s, w) => s + (Number(w.price) || 0), 0);
+  $('#summary').textContent = `${watches.length} ${plural(watches.length, 'zegarek', 'zegarki', 'zegarków')}` + (total ? ` · ${fmtPrice(total)}` : '');
+
+  if (!items.length) {
+    $('#grid').innerHTML = `<div class="empty">${watches.length ? 'Nic nie pasuje do wyszukiwania.' : 'Kolekcja jest pusta. Dodaj pierwszy zegarek.'}</div>`;
+    return;
+  }
+  const t = today();
+  $('#grid').innerHTML = items.map(w => {
+    const last = lastWorn(w);
+    const wornToday = w.wears.includes(t);
+    return `
+    <article class="card">
+      <div class="photo" data-edit="${w.id}">${w.photo ? `<img src="${w.photo}" alt="">` : watchIcon}</div>
+      <div class="body">
+        <div class="brand">${esc(w.brand)}</div>
+        <div class="model">${esc(w.model)}</div>
+        <div class="meta">${[esc(w.ref), fmtDate(w.date), fmtPrice(w.price)].filter(Boolean).join(' · ')}</div>
+        <div class="worn">${last ? `Noszony ${w.wears.length}× · ostatnio ${relDays(last)}` : 'Jeszcze nienoszony'}</div>
+        <div class="actions">
+          <button class="btn accent ${wornToday ? 'on' : ''}" data-wear="${w.id}">${wornToday ? '✓ Noszę dziś' : 'Noszę dziś'}</button>
+          <button class="btn" data-edit="${w.id}">Edytuj</button>
+        </div>
+      </div>
+    </article>`;
+  }).join('');
+}
+
+function plural(n, one, few, many) {
+  if (n === 1) return one;
+  const d = n % 10, h = n % 100;
+  return d >= 2 && d <= 4 && (h < 12 || h > 14) ? few : many;
+}
+
+$('#grid').addEventListener('click', e => {
+  const wear = e.target.closest('[data-wear]');
+  const edit = e.target.closest('[data-edit]');
+  if (wear) toggleWear(wear.dataset.wear);
+  else if (edit) openForm(edit.dataset.edit);
+});
+$('#search').addEventListener('input', renderList);
+
+function toggleWear(id) {
+  const w = watches.find(x => x.id === id);
+  const t = today();
+  if (w.wears.includes(t)) {
+    w.wears = w.wears.filter(d => d !== t);
+    toast('Cofnięto dzisiejsze noszenie');
+  } else {
+    w.wears.push(t);
+    toast(`Zapisano: ${w.brand} ${w.model} – dziś`);
+  }
+  save(); renderAll();
+}
+
+/* ===== Statystyki ===== */
+function renderStats() {
+  const el = $('#tab-stats');
+  const totalWears = watches.reduce((s, w) => s + w.wears.length, 0);
+  if (!totalWears) {
+    el.innerHTML = `<div class="empty">Brak zapisanych dni noszenia. Kliknij „Noszę dziś” przy zegarku.</div>`;
+    return;
+  }
+  const ranked = watches.slice().sort((a, b) => b.wears.length - a.wears.length || (lastWorn(b) || '').localeCompare(lastWorn(a) || ''));
+  const top = ranked[0];
+  const max = top.wears.length;
+  const last30 = watches.reduce((s, w) => s + w.wears.filter(d => d >= daysAgo(29)).length, 0);
+  const neglected = watches.filter(w => w.wears.length)
+    .sort((a, b) => lastWorn(a).localeCompare(lastWorn(b)))[0];
+  const never = watches.filter(w => !w.wears.length).length;
+
+  el.innerHTML = `
+    <div class="stat-top">
+      <div class="thumb">${top.photo ? `<img src="${top.photo}" alt="">` : watchIcon}</div>
+      <div>
+        <div class="label">Noszony najczęściej</div>
+        <div class="model">${esc(top.brand)} ${esc(top.model)}</div>
+        <div class="meta">${max}× · ${Math.round(max / totalWears * 100)}% wszystkich dni</div>
+      </div>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><div class="label">Dni łącznie</div><b>${totalWears}</b></div>
+      <div class="kpi"><div class="label">Ostatnie 30 dni</div><b>${last30}</b></div>
+      <div class="kpi"><div class="label">${never ? 'Nienoszone' : 'Najdłużej w szufladzie'}</div>
+        <b>${never ? never : ''}</b>${never ? '' : `<span class="meta">${esc(neglected.brand)} ${esc(neglected.model)} · ${relDays(lastWorn(neglected))}</span>`}</div>
+    </div>
+    <div class="bars">
+      ${ranked.map(w => `
+        <div class="bar-row">
+          <span class="name">${esc(w.brand)} ${esc(w.model)}</span>
+          <span class="count">${w.wears.length}×</span>
+          <div class="track"><div class="fill" style="width:${max ? w.wears.length / max * 100 : 0}%"></div></div>
+        </div>`).join('')}
+    </div>`;
+}
+
+/* ===== Formularz ===== */
+const dlg = $('#dlg'), form = $('#form');
+let editingId = null, pendingPhoto = '';
+
+function openForm(id = null) {
+  editingId = id;
+  const w = id ? watches.find(x => x.id === id) : {};
+  $('#dlgTitle').textContent = id ? 'Edytuj zegarek' : 'Nowy zegarek';
+  form.brand.value = w.brand || '';
+  form.model.value = w.model || '';
+  form.ref.value = w.ref || '';
+  form.date.value = w.date || '';
+  form.price.value = w.price ?? '';
+  form.notes.value = w.notes || '';
+  $('#photoInput').value = '';
+  setPhotoPreview(w.photo || '');
+  $('#delBtn').hidden = !id;
+  dlg.showModal();
+}
+
+function setPhotoPreview(src) {
+  pendingPhoto = src;
+  $('#photoPrev').innerHTML = src ? `<img src="${src}" alt="">` : '';
+  $('#photoClear').hidden = !src;
+}
+
+// Zmniejsza zdjęcie do max 800 px i kompresuje do JPEG, żeby zmieściło się w pamięci przeglądarki.
+function resizeImage(file, maxSize = 800) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      resolve(c.toDataURL('image/jpeg', 0.8));
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+$('#photoInput').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try { setPhotoPreview(await resizeImage(f)); }
+  catch { toast('Nie udało się wczytać zdjęcia'); }
+});
+$('#photoClear').addEventListener('click', () => { setPhotoPreview(''); $('#photoInput').value = ''; });
+$('#cancelBtn').addEventListener('click', () => dlg.close());
+$('#addBtn').addEventListener('click', () => openForm());
+
+form.addEventListener('submit', e => {
+  e.preventDefault();
+  const data = {
+    brand: form.brand.value.trim(),
+    model: form.model.value.trim(),
+    ref: form.ref.value.trim(),
+    date: form.date.value,
+    price: form.price.value === '' ? null : Number(form.price.value),
+    notes: form.notes.value.trim(),
+    photo: pendingPhoto
+  };
+  const backup = JSON.stringify(watches);
+  if (editingId) Object.assign(watches.find(x => x.id === editingId), data);
+  else watches.push({ id: uid(), wears: [], ...data });
+  if (!save()) { watches = JSON.parse(backup); return; }
+  dlg.close(); renderAll();
+  toast(editingId ? 'Zapisano zmiany' : 'Dodano zegarek');
+});
+
+$('#delBtn').addEventListener('click', () => {
+  const w = watches.find(x => x.id === editingId);
+  if (!confirm(`Usunąć ${w.brand} ${w.model}? Tej operacji nie można cofnąć.`)) return;
+  watches = watches.filter(x => x.id !== editingId);
+  save(); dlg.close(); renderAll();
+  toast('Usunięto zegarek');
+});
+
+/* ===== Kopia zapasowa ===== */
+$('#exportBtn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(watches, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `zegarki-${today()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+$('#importFile').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (!Array.isArray(data)) throw new Error();
+    if (!confirm(`Wczytać ${data.length} pozycji i zastąpić obecne dane?`)) return;
+    watches = data.map(w => ({ id: w.id || uid(), wears: [], photo: '', ...w }));
+    save(); renderAll(); toast('Wczytano kopię');
+  } catch { toast('To nie jest prawidłowy plik kopii'); }
+  e.target.value = '';
+});
+
+$('#resetBtn').addEventListener('click', () => {
+  if (!confirm('Usunąć wszystkie dane i przywrócić przykłady?')) return;
+  watches = sampleData(); save(); renderAll(); toast('Przywrócono przykłady');
+});
+
+/* ===== Zakładki ===== */
+document.querySelectorAll('nav.tabs button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('nav.tabs button').forEach(x => x.setAttribute('aria-selected', x === b));
+  ['list', 'stats', 'settings'].forEach(t => $('#tab-' + t).hidden = t !== b.dataset.tab);
+}));
+
+function renderAll() { renderList(); renderStats(); }
+renderAll();
+</script>
+</body>
+</html>
