@@ -57,6 +57,17 @@
   h1 { font: 600 2.2rem/1.1 var(--serif); margin: 4px 0 0; }
   .today { color: var(--muted); font-size: .9rem; margin-top: 6px; min-height: 1.3em; }
 
+  .seg { display: flex; gap: 6px; margin: 0 0 14px; }
+  .seg button { flex: 1; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 9px 6px;
+    font: 500 .85rem var(--sans); color: var(--muted); cursor: pointer; white-space: nowrap; }
+  .seg button[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .seg .n { opacity: .6; margin-left: 3px; }
+  .badge { display: inline-block; font-size: .72rem; font-weight: 500; padding: 2px 8px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent); margin-top: 4px; }
+  .docbtn { width: 48px; height: 48px; border-radius: 12px; flex: none; cursor: pointer; border: 1.5px solid var(--line);
+    background: var(--bg); font-size: 1.2rem; display: flex; align-items: center; justify-content: center; position: relative; }
+  .docbtn .count { position: absolute; right: -4px; top: -4px; background: var(--accent); color: #fff; font: 600 .62rem var(--sans);
+    padding: 1px 5px; border-radius: 999px; }
   .list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .item {
     display: flex; align-items: center; gap: 14px; padding: 10px 12px 10px 10px;
@@ -124,6 +135,9 @@
     <button class="btn" id="loginBtn">Zaloguj przez Google</button>
   </div>
 
+  <!-- Przełącznik widoku -->
+  <div class="seg" id="seg" role="group" aria-label="Widok" hidden></div>
+
   <!-- Lista zegarków -->
   <div class="list" id="list"></div>
 
@@ -189,27 +203,56 @@ function openGallery(id) {
 
 /* ===== Stan ===== */
 let watches = [];
-try { watches = JSON.parse(localStorage.getItem(CACHE_KEY) || '[]').filter(w => !w.status || w.status === 'owned'); } catch (e) {}
+try { watches = JSON.parse(localStorage.getItem(CACHE_KEY) || '[]'); } catch (e) {}
 let loggedIn = false;
+
+// Widoki: w kolekcji (noszenie), zamówione i pożądane (tylko podgląd – zmiany robi się w panelu).
+const VIEWS = { owned: 'Kolekcja', ordered: 'Zamówione', wish: 'Pożądane' };
+const statusOf = w => VIEWS[w.status] ? w.status : 'owned';
+let view = 'owned';
+try { if (VIEWS[localStorage.getItem('zegarki.noszenie.view')]) view = localStorage.getItem('zegarki.noszenie.view'); } catch (e) {}
+const docsOf = w => w.docs || [];
+const fmtDate = s => s ? new Date(s + 'T12:00').toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+function openDocs(id) {
+  const w = watches.find(x => x.id === id);
+  Zdjecia.gallery(docsOf(w).map(p => ({ thumb: p.thumb, load: () => fullSrc(w, p) })), 0, `${w.brand} ${w.model} – dokumenty`);
+}
+$('#seg').addEventListener('click', e => {
+  const b = e.target.closest('[data-view]');
+  if (!b) return;
+  view = b.dataset.view;
+  try { localStorage.setItem('zegarki.noszenie.view', view); } catch (e) {}
+  render();
+  window.scrollTo(0, 0);
+});
 
 /* ===== Widok ===== */
 function render() {
   const t = today();
   $('#date').textContent = new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' });
-  const worn = watches.filter(w => (w.wears || []).includes(t));
-  $('#todayLine').textContent = !loggedIn ? '' : worn.length
-    ? 'Dziś: ' + worn.map(w => `${w.brand} ${w.model}`).join(', ')
+  const owned = watches.filter(w => statusOf(w) === 'owned');
+  const worn = owned.filter(w => (w.wears || []).includes(t));
+  const inView = watches.filter(w => statusOf(w) === view);
+  $('#todayLine').textContent = !loggedIn ? ''
+    : view === 'ordered' ? (inView.length ? `W drodze: ${inView.length} ${inView.length === 1 ? 'zegarek' : 'zegarki'}` : '')
+    : view === 'wish' ? (inView.length ? 'Lista życzeń' : '')
+    : worn.length ? 'Dziś: ' + worn.map(w => `${w.brand} ${w.model}`).join(', ')
     : 'Dotknij przycisku przy zegarku, który dziś nosisz.';
 
   $('#loginView').hidden = loggedIn;
   $('#logoutWrap').hidden = !loggedIn;
+  $('#seg').hidden = !loggedIn;
   if (!loggedIn) { $('#list').innerHTML = ''; return; }
-  if (!watches.length) {
-    $('#list').innerHTML = `<div class="center">Brak zegarków. Dodaj je w <a href="index.html">pełnej wersji</a>.</div>`;
+  $('#seg').innerHTML = Object.entries(VIEWS).map(([k, v]) =>
+    `<button data-view="${k}" aria-pressed="${k === view}">${v}<span class="n">${watches.filter(w => statusOf(w) === k).length}</span></button>`).join('');
+  if (!inView.length) {
+    $('#list').innerHTML = `<div class="center">${view === 'owned' ? 'Brak zegarków.' : view === 'ordered' ? 'Brak zamówionych zegarków.' : 'Lista pożądanych jest pusta.'}
+      Dodajesz je w <a href="index.html">pełnej wersji</a>.</div>`;
     return;
   }
   // Ta sama kolejność co w pełnej wersji (ustawiana tam przyciskiem ⇅).
-  const items = watches.slice().sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity) || (a.brand + a.model).localeCompare(b.brand + b.model, 'pl'));
+  const items = inView.sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity) || (a.brand + a.model).localeCompare(b.brand + b.model, 'pl'));
+  if (view !== 'owned') { $('#list').innerHTML = items.map(previewRow).join(''); return; }
   $('#list').innerHTML = items.map(w => {
     const wears = w.wears || [];
     const on = wears.includes(t);
@@ -229,11 +272,36 @@ function render() {
   }).join('');
 }
 
+// Wiersz zamówionego / pożądanego: tylko podgląd – zdjęcia, referencja, dokumenty.
+function previewRow(w) {
+  const ph = photosOf(w), docs = docsOf(w);
+  let badge = '♡ Na liście życzeń';
+  if (statusOf(w) === 'ordered') {
+    const days = w.date ? Math.max(0, Math.round((new Date(today()) - new Date(w.date)) / 86400000)) : null;
+    badge = w.date ? `📦 Zamówiony ${fmtDate(w.date)} · ${days} ${days === 1 ? 'dzień' : 'dni'}` : '📦 Zamówiony';
+  }
+  return `
+    <div class="item">
+      ${ph.length
+        ? `<button class="thumb" data-gallery="${esc(w.id)}" aria-label="Zdjęcia: ${esc(w.brand)} ${esc(w.model)}"><img src="${ph[0].thumb}" alt="">${ph.length > 1 ? `<span class="count">${ph.length}</span>` : ''}</button>`
+        : `<div class="thumb">${watchIcon}</div>`}
+      <div class="info">
+        <div class="brand">${esc(w.brand)}</div>
+        <div class="model">${esc(w.model)}</div>
+        ${w.ref ? `<div class="meta">${esc(w.ref)}</div>` : ''}
+        <span class="badge">${badge}</span>
+      </div>
+      ${docs.length ? `<button class="docbtn" data-docs="${esc(w.id)}" aria-label="Dokumenty (${docs.length})">📄${docs.length > 1 ? `<span class="count">${docs.length}</span>` : ''}</button>` : ''}
+    </div>`;
+}
+
 $('#list').addEventListener('click', e => {
   const b = e.target.closest('.wear');
   const g = e.target.closest('[data-gallery]');
+  const d = e.target.closest('[data-docs]');
   if (b) toggleWear(b.dataset.id);
   else if (g) openGallery(g.dataset.gallery);
+  else if (d) openDocs(d.dataset.docs);
 });
 
 // Po powrocie do aplikacji (np. następnego dnia) odśwież datę i stan przycisków.
@@ -291,9 +359,7 @@ async function onUser(user) {
   cloud.user = user; loggedIn = true; render();
   const { collection, onSnapshot } = cloud.fs;
   unsub = onSnapshot(collection(cloud.db, 'users', user.uid, 'watches'), { includeMetadataChanges: true }, snap => {
-    // Tylko zegarki „w kolekcji” – zamówionych i pożądanych nie da się jeszcze nosić.
-    watches = snap.docs.map(d => ({ id: d.id, wears: [], photo: '', ...d.data() }))
-      .filter(w => !w.status || w.status === 'owned');
+    watches = snap.docs.map(d => ({ id: d.id, wears: [], photo: '', ...d.data() }));
     try { localStorage.setItem(CACHE_KEY, JSON.stringify(watches)); } catch (e) {}
     render();
     setStatus(snap.metadata.hasPendingWrites ? 'Wysyłanie…'
@@ -304,7 +370,7 @@ async function onUser(user) {
 
 function toggleWear(id) {
   const w = watches.find(x => x.id === id);
-  if (!w || !cloud.user) return;
+  if (!w || !cloud.user || statusOf(w) !== 'owned') return;
   const t = today();
   const add = !(w.wears || []).includes(t);
   // Od razu pokaż zmianę, chmura potwierdzi ją chwilę później.
