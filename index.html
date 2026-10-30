@@ -368,7 +368,7 @@ function daysAgo(n) {
   return d.toLocaleDateString('sv-SE');
 }
 
-const APP_VERSION = '2.6';
+const APP_VERSION = '2.7';
 const META_KEY = 'zegarki.meta.v2';
 let watches = load();
 let meta = loadMeta();
@@ -575,9 +575,17 @@ function renderStats() {
   const top = ranked[0];
   const max = top.wears.length;
   const last30 = [...allDays].filter(d => d >= daysAgo(29)).length;
-  const neglected = watches.filter(w => w.wears.length)
+  // „Najdłużej w szufladzie”: tylko zegarki, których dziś nie nosisz; nienoszone nigdy mają pierwszeństwo.
+  const neverList = watches.filter(w => !w.wears.length).sort(byOrder);
+  const never = neverList.length;
+  const neglected = watches.filter(w => w.wears.length && lastWorn(w) < today())
     .sort((a, b) => lastWorn(a).localeCompare(lastWorn(b)))[0];
-  const never = watches.filter(w => !w.wears.length).length;
+  const names = list => list.slice(0, 2).map(w => `${esc(w.brand)} ${esc(w.model)}`).join(', ') + (list.length > 2 ? ` i ${list.length - 2} ${plural(list.length - 2, 'inny', 'inne', 'innych')}` : '');
+  const drawerKpi = never
+    ? `<div class="label">Nienoszone</div><b>${never}</b><span class="meta">${names(neverList)}</span>`
+    : neglected
+      ? `<div class="label">Najdłużej w szufladzie</div><span class="meta">${esc(neglected.brand)} ${esc(neglected.model)} · ${relDays(lastWorn(neglected))}</span>`
+      : `<div class="label">Najdłużej w szufladzie</div><span class="meta">Wszystkie w użyciu 👌</span>`;
 
   el.innerHTML = `${sinceLine()}
     <div class="stat-top">
@@ -591,8 +599,7 @@ function renderStats() {
     <div class="kpis">
       <div class="kpi"><div class="label">Dni z zegarkiem</div><b>${totalWears}</b></div>
       <div class="kpi"><div class="label">Ostatnie 30 dni</div><b>${last30}</b></div>
-      <div class="kpi"><div class="label">${never ? 'Nienoszone' : 'Najdłużej w szufladzie'}</div>
-        <b>${never ? never : ''}</b>${never ? '' : `<span class="meta">${esc(neglected.brand)} ${esc(neglected.model)} · ${relDays(lastWorn(neglected))}</span>`}</div>
+      <div class="kpi">${drawerKpi}</div>
     </div>
     ${renderCalendar()}
     <div class="bars">
