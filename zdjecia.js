@@ -32,8 +32,15 @@ const Zdjecia = (() => {
   .zd-gal[hidden] { display: none; }
   .zd-track { flex: 1; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
   .zd-track::-webkit-scrollbar { display: none; }
-  .zd-slide { flex: 0 0 100%; scroll-snap-align: center; display: flex; align-items: center; justify-content: center; position: relative; }
-  .zd-slide img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+  .zd-track.locked { overflow-x: hidden; }
+  .zd-slide { flex: 0 0 100%; scroll-snap-align: center; display: flex; align-items: center; justify-content: center; position: relative;
+    overflow: hidden; touch-action: pan-x; }
+  .zd-slide.zoomed { touch-action: none; cursor: grab; }
+  .zd-slide img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; transform-origin: center;
+    user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
+  .zd-hint { position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 18px); transform: translateX(-50%);
+    background: rgba(255,255,255,.15); padding: 6px 12px; border-radius: 999px; font: .8rem var(--sans); white-space: nowrap;
+    transition: opacity .6s; pointer-events: none; }
   .zd-slide .ld { position: absolute; bottom: 16px; font-size: .8rem; opacity: .6; font-family: var(--sans); }
   .zd-top { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 12px;
     padding: calc(env(safe-area-inset-top) + 10px) 12px 10px 16px; background: linear-gradient(rgba(0,0,0,.6), transparent); font-family: var(--sans); }
@@ -194,12 +201,84 @@ const Zdjecia = (() => {
     gal.setAttribute('role', 'dialog'); gal.setAttribute('aria-modal', 'true');
     gal.innerHTML = `<div class="zd-track"></div>
       <div class="zd-top"><div class="zd-title"></div><div class="zd-count"></div><button class="zd-x" aria-label="Zamknij">✕</button></div>
-      <button class="zd-nav prev" aria-label="Poprzednie">‹</button><button class="zd-nav next" aria-label="Następne">›</button>`;
+      <button class="zd-nav prev" aria-label="Poprzednie">‹</button><button class="zd-nav next" aria-label="Następne">›</button>
+      <div class="zd-hint"></div>`;
     document.body.appendChild(gal);
     const track = gal.querySelector('.zd-track');
     const idx = () => Math.round(track.scrollLeft / track.clientWidth);
     const go = i => track.scrollTo({ left: i * track.clientWidth, behavior: 'smooth' });
-    track.addEventListener('scroll', () => { gal.querySelector('.zd-count').textContent = `${idx() + 1} / ${track.children.length}`; });
+    track.addEventListener('scroll', () => {
+      gal.querySelector('.zd-count').textContent = `${idx() + 1} / ${track.children.length}`;
+      [...track.children].forEach((sl, i) => { if (i !== idx() && zoom.get(sl)?.s > 1) applyZoom(sl, { s: 1, x: 0, y: 0 }); });
+    });
+
+    /* Przybliżanie: dwa palce, podwójne dotknięcie / dwuklik, kółko myszy; przesuwanie przybliżonego zdjęcia. */
+    const zoom = new WeakMap();
+    const stan = sl => zoom.get(sl) || { s: 1, x: 0, y: 0 };
+    function applyZoom(sl, z, anim = false) {
+      const im = sl.querySelector('img');
+      if (z.s <= 1.01) z = { s: 1, x: 0, y: 0 };
+      // Nie pozwól „wyjechać” zdjęciem poza ekran.
+      const mx = Math.max(0, (im.offsetWidth * z.s - sl.clientWidth) / 2);
+      const my = Math.max(0, (im.offsetHeight * z.s - sl.clientHeight) / 2);
+      z.x = Math.min(mx, Math.max(-mx, z.x)); z.y = Math.min(my, Math.max(-my, z.y));
+      zoom.set(sl, z);
+      im.style.transition = anim ? 'transform .25s' : 'none';
+      im.style.transform = `translate(${z.x}px, ${z.y}px) scale(${z.s})`;
+      sl.classList.toggle('zoomed', z.s > 1);
+      track.classList.toggle('locked', z.s > 1);  // przybliżone: palec przesuwa zdjęcie, nie przełącza na następne
+    }
+    // Powiększ do skali s, tak by punkt pod palcem/kursorem został w miejscu.
+    function zoomAt(sl, s, cx, cy, anim) {
+      const z = stan(sl), r = sl.getBoundingClientRect();
+      const fx = cx - (r.left + r.width / 2), fy = cy - (r.top + r.height / 2);
+      const ns = Math.min(5, Math.max(1, s)), k = ns / z.s;
+      applyZoom(sl, { s: ns, x: fx - (fx - z.x) * k, y: fy - (fy - z.y) * k }, anim);
+    }
+    const pts = new Map();
+    let pinch = null, tap = null, lastTap = null;
+    track.addEventListener('pointerdown', e => {
+      const sl = e.target.closest('.zd-slide'); if (!sl) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY, sl });
+      if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }; tap = null; }
+      else tap = { x: e.clientX, y: e.clientY, t: Date.now() };
+      if (stan(sl).s > 1 || pts.size === 2) try { sl.setPointerCapture(e.pointerId); } catch {}
+    });
+    track.addEventListener('pointermove', e => {
+      const p = pts.get(e.pointerId); if (!p) return;
+      const dx = e.clientX - p.x, dy = e.clientY - p.y;
+      p.x = e.clientX; p.y = e.clientY;
+      if (tap && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 10) tap = null;
+      if (pts.size === 2 && pinch) {
+        const [a, b] = [...pts.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        zoomAt(p.sl, stan(p.sl).s * d / pinch.d, mx, my);
+        const z = stan(p.sl); applyZoom(p.sl, { ...z, x: z.x + mx - pinch.mx, y: z.y + my - pinch.my });
+        pinch = { d, mx, my };
+      } else if (pts.size === 1 && stan(p.sl).s > 1) {
+        const z = stan(p.sl); applyZoom(p.sl, { ...z, x: z.x + dx, y: z.y + dy });
+      }
+    });
+    const up = e => {
+      const p = pts.get(e.pointerId); pts.delete(e.pointerId);
+      if (pts.size < 2) pinch = null;
+      if (!p || e.type !== 'pointerup' || !tap || Date.now() - tap.t > 300) return;
+      // Podwójne dotknięcie: przybliż w tym miejscu albo wróć do całego zdjęcia.
+      if (lastTap && Date.now() - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30) {
+        if (stan(p.sl).s > 1) applyZoom(p.sl, { s: 1, x: 0, y: 0 }, true);
+        else zoomAt(p.sl, 2.5, e.clientX, e.clientY, true);
+        lastTap = null;
+      } else lastTap = { x: e.clientX, y: e.clientY, t: Date.now() };
+      tap = null;
+    };
+    track.addEventListener('pointerup', up);
+    track.addEventListener('pointercancel', up);
+    track.addEventListener('wheel', e => {
+      const sl = e.target.closest('.zd-slide'); if (!sl) return;
+      e.preventDefault();
+      zoomAt(sl, stan(sl).s * Math.exp(-e.deltaY / 300), e.clientX, e.clientY);
+    }, { passive: false });
+    gal.addEventListener('gesturestart', e => e.preventDefault());  // Safari: nie powiększaj całej strony
     gal.querySelector('.zd-x').addEventListener('click', closeGallery);
     gal.querySelector('.prev').addEventListener('click', () => go(idx() - 1));
     gal.querySelector('.next').addEventListener('click', () => go(idx() + 1));
@@ -227,6 +306,11 @@ const Zdjecia = (() => {
       Promise.resolve().then(it.load).then(src => { im.src = src; slide.querySelector('.ld').remove(); })
         .catch(() => { slide.querySelector('.ld').textContent = 'Pełne zdjęcie niedostępne (brak internetu?)'; });
     });
+    gal.querySelector('.zd-track').classList.remove('locked');
+    const hint = gal.querySelector('.zd-hint');
+    hint.textContent = matchMedia('(hover: none)').matches ? 'Przybliż: dwa palce lub dotknij dwa razy' : 'Przybliż: kółko myszy lub dwuklik';
+    hint.style.opacity = 1;
+    setTimeout(() => { hint.style.opacity = 0; }, 2500);
     gal.hidden = false;
     document.documentElement.style.overflow = 'hidden';
     requestAnimationFrame(() => { track.scrollLeft = start * track.clientWidth; });
