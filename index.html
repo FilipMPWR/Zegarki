@@ -60,6 +60,16 @@
   nav.tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
 
   .toolbar { display: flex; gap: 8px; margin-bottom: 16px; }
+  .sections { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; scrollbar-width: none; }
+  .sections::-webkit-scrollbar { display: none; }
+  .sections button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 8px 14px;
+    font: 500 .85rem var(--sans); color: var(--muted); white-space: nowrap; cursor: pointer; }
+  .sections button[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .sections .n { opacity: .6; margin-left: 2px; }
+  .sec-info { color: var(--muted); font-size: .85rem; margin: -4px 0 12px; }
+  .badge { display: inline-block; font-size: .75rem; font-weight: 500; padding: 3px 8px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent); margin-top: 4px; align-self: flex-start; }
+  .badge.late { background: var(--danger); color: #fff; }
   .toolbar input[type=search] { flex: 1; min-width: 0; }
 
   input, textarea, select {
@@ -100,7 +110,7 @@
   .meta { color: var(--muted); font-size: .82rem; }
   .worn { font-size: .8rem; color: var(--muted); margin-top: 4px; }
   .actions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
-  .actions .btn.accent { flex: 1; }
+  .actions .btn.accent { flex: 1; min-width: 0; }
 
   .empty { text-align: center; color: var(--muted); padding: 48px 16px; }
 
@@ -182,6 +192,9 @@
   .ph-btns button.del { color: var(--danger); flex: 0 0 30px; }
   .ph-add { cursor: pointer; }
   .ph-add input { display: none; }
+  .ph-img.doc { background: #fff; }
+  .ph-img.doc img { object-fit: contain; }
+  .doc-btn { padding: 8px 10px; }
   .wear-edit { display: grid; gap: 8px; padding-top: 4px; border-top: 1px solid var(--line); }
   .wear-list { display: flex; flex-wrap: wrap; gap: 6px; }
   .wear-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--accent-soft); color: var(--text);
@@ -244,6 +257,8 @@
   </nav>
 
   <section id="tab-list">
+    <div class="sections" id="sections" role="group" aria-label="Sekcja"></div>
+    <p class="sec-info" id="secInfo" hidden></p>
     <div class="toolbar">
       <input type="search" id="search" placeholder="Szukaj…" aria-label="Szukaj">
       <button class="btn" id="orderBtn" title="Ustaw kolejność" aria-label="Ustaw kolejność">⇅</button>
@@ -305,10 +320,21 @@
     </div>
     <div class="row">
       <label class="f">Referencja<input name="ref" autocomplete="off"></label>
-      <label class="f">Data zakupu<input name="date" type="date"></label>
+      <label class="f" id="dateWrap"><span id="dateLabel">Data zakupu</span><input name="date" type="date"></label>
     </div>
-    <label class="f">Cena (zł)<input name="price" type="number" min="0" step="1" inputmode="numeric"></label>
+    <label class="f">Status<select name="status">
+      <option value="owned">W kolekcji</option>
+      <option value="ordered">Zamówiony</option>
+      <option value="wish">Pożądany</option>
+    </select></label>
+    <label class="f"><span id="priceLabel">Cena (zł)</span><input name="price" type="number" min="0" step="1" inputmode="numeric"></label>
     <label class="f">Notatki<textarea name="notes"></textarea></label>
+    <div class="ph-edit">
+      <div class="label" id="docTitle">Dokumenty</div>
+      <div class="meta" style="margin-top:-4px">Zdjęcia potwierdzenia zamówienia, karty gwarancyjnej, faktury…</div>
+      <div class="ph-grid" id="docGrid"></div>
+      <label class="btn small ph-add" id="docAdd">+ Dodaj dokument<input type="file" id="docInput" accept="image/*" multiple></label>
+    </div>
     <div class="wear-edit" id="wearSection">
       <div class="label" id="wearTitle">Historia noszenia</div>
       <div class="wear-list" id="wearList"></div>
@@ -368,7 +394,7 @@ function daysAgo(n) {
   return d.toLocaleDateString('sv-SE');
 }
 
-const APP_VERSION = '2.7';
+const APP_VERSION = '3.0';
 const META_KEY = 'zegarki.meta.v2';
 let watches = load();
 let meta = loadMeta();
@@ -452,19 +478,66 @@ function toast(msg) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
 }
 
+/* ===== Sekcje: W kolekcji / Zamówione / Pożądane ===== */
+const SECTIONS = {
+  owned:   { label: 'Kolekcja',  empty: 'Kolekcja jest pusta. Dodaj pierwszy zegarek.' },
+  ordered: { label: 'Zamówione', empty: 'Brak zamówionych zegarków. Dodaj zamówiony przyciskiem „+ Dodaj”.' },
+  wish:    { label: 'Pożądane',  empty: 'Lista pożądanych jest pusta. Dodaj wymarzony zegarek przyciskiem „+ Dodaj”.' }
+};
+const statusOf = w => SECTIONS[w.status] ? w.status : 'owned';   // stare wpisy bez statusu = w kolekcji
+const isOwned = w => statusOf(w) === 'owned';
+let section = 'owned';
+try { section = SECTIONS[localStorage.getItem('zegarki.section')] ? localStorage.getItem('zegarki.section') : 'owned'; } catch (e) {}
+const sumPrice = list => list.reduce((s, w) => s + (Number(w.price) || 0), 0);
+
+$('#sections').addEventListener('click', e => {
+  const b = e.target.closest('[data-sec]');
+  if (!b) return;
+  section = b.dataset.sec;
+  try { localStorage.setItem('zegarki.section', section); } catch (e) {}
+  renderList();
+});
+
+// „📦 Zamówiony 12 marca 2025 · czekasz 230 dni”
+function orderedBadge(w) {
+  if (!w.date) return `<span class="badge">📦 Zamówiony · czekam</span>`;
+  const days = Math.max(0, Math.round((new Date(today()) - new Date(w.date)) / 86400000));
+  return `<span class="badge">📦 Zamówiony ${fmtDate(w.date)} · czekasz ${days} ${plural(days, 'dzień', 'dni', 'dni')}</span>`;
+}
+
+function moveTo(id, to) {
+  const w = watches.find(x => x.id === id);
+  w.status = to;
+  // Przyjazd: data zamówienia zostaje zapamiętana, a datą zakupu staje się dzień odbioru (można zmienić w Edytuj).
+  if (to === 'owned') { if (w.date) w.orderedOn = w.date; w.date = today(); }
+  if (to === 'ordered') w.date = today();   // „Zamówiłem” z listy pożądanych = zamówione dziś
+  save(); cloudPut(w); renderAll();
+  toast(to === 'owned' ? `🎉 ${w.brand} ${w.model} – witamy w kolekcji!` : `Przeniesiono do „Zamówione” (data zamówienia: dziś)`);
+}
+
 /* ===== Lista ===== */
 function renderList() {
   const q = $('#search').value.trim().toLowerCase();
-  const items = watches
+  const inSection = watches.filter(w => statusOf(w) === section);
+  const items = inSection
     .filter(w => !q || [w.brand, w.model, w.ref, w.notes].join(' ').toLowerCase().includes(q))
     .sort(byOrder);
 
-  const total = watches.reduce((s, w) => s + (Number(w.price) || 0), 0);
-  const count = q ? `Znaleziono ${items.length} z ${watches.length}` : `${watches.length} ${plural(watches.length, 'zegarek', 'zegarki', 'zegarków')}`;
-  $('#summary').textContent = `${count} · łączna wartość ${fmtPrice(total)}`;
+  const counts = Object.fromEntries(Object.keys(SECTIONS).map(k => [k, watches.filter(w => statusOf(w) === k).length]));
+  $('#sections').innerHTML = Object.entries(SECTIONS).map(([k, v]) =>
+    `<button data-sec="${k}" aria-pressed="${k === section}">${v.label}<span class="n">${counts[k]}</span></button>`).join('');
+
+  const owned = watches.filter(isOwned);
+  const extra = [counts.ordered && `${counts.ordered} w drodze`, counts.wish && `${counts.wish} na liście życzeń`].filter(Boolean);
+  $('#summary').textContent = `${owned.length} ${plural(owned.length, 'zegarek', 'zegarki', 'zegarków')} · łączna wartość ${fmtPrice(sumPrice(owned))}` + (extra.length ? ' · ' + extra.join(' · ') : '');
+
+  const secSum = sumPrice(inSection);
+  $('#secInfo').hidden = section === 'owned' || !secSum;
+  $('#secInfo').textContent = section === 'ordered' ? `Wartość zamówień: ${fmtPrice(secSum)}` : `Suma marzeń: ${fmtPrice(secSum)}`;
+  if (q) $('#secInfo').hidden = false, $('#secInfo').textContent = `Znaleziono ${items.length} z ${inSection.length}`;
 
   if (!items.length) {
-    $('#grid').innerHTML = `<div class="empty">${watches.length ? 'Nic nie pasuje do wyszukiwania.' : 'Kolekcja jest pusta. Dodaj pierwszy zegarek.'}</div>`;
+    $('#grid').innerHTML = `<div class="empty">${inSection.length ? 'Nic nie pasuje do wyszukiwania.' : SECTIONS[section].empty}</div>`;
     return;
   }
   $('#grid').innerHTML = items.map(w => {
@@ -477,10 +550,14 @@ function renderList() {
       <div class="body">
         <div class="brand">${esc(w.brand)}</div>
         <div class="model">${esc(w.model)}</div>
-        <div class="meta">${[esc(w.ref), fmtDate(w.date), fmtPrice(w.price)].filter(Boolean).join(' · ')}</div>
-        <div class="worn">${last ? `Noszony ${w.wears.length}× · ostatnio ${relDays(last)}` : 'Jeszcze nienoszony'}</div>
+        <div class="meta">${[esc(w.ref), statusOf(w) === 'owned' && fmtDate(w.date), fmtPrice(w.price)].filter(Boolean).join(' · ')}</div>
+        ${statusOf(w) === 'owned' ? `<div class="worn">${last ? `Noszony ${w.wears.length}× · ostatnio ${relDays(last)}` : 'Jeszcze nienoszony'}</div>`
+          : statusOf(w) === 'ordered' ? orderedBadge(w) : `<span class="badge">♡ Na liście życzeń</span>`}
         <div class="actions">
+          ${statusOf(w) === 'ordered' ? `<button class="btn accent" data-move="${w.id}" data-to="owned">Przyjechał</button>` : ''}
+          ${statusOf(w) === 'wish' ? `<button class="btn accent" data-move="${w.id}" data-to="ordered">Zamówiłem</button>` : ''}
           <button class="btn" data-edit="${w.id}">Edytuj</button>
+          ${docsOf(w).length ? `<button class="btn doc-btn" data-docs="${w.id}" title="Dokumenty" aria-label="Dokumenty (${docsOf(w).length})">📄${docsOf(w).length > 1 ? ' ' + docsOf(w).length : ''}</button>` : ''}
         </div>
       </div>
     </article>`;
@@ -496,7 +573,11 @@ function plural(n, one, few, many) {
 $('#grid').addEventListener('click', e => {
   const edit = e.target.closest('[data-edit]');
   const galleryBtn = e.target.closest('[data-gallery]');
-  if (galleryBtn) openGallery(galleryBtn.dataset.gallery);
+  const move = e.target.closest('[data-move]');
+  const docsBtn = e.target.closest('[data-docs]');
+  if (docsBtn) openDocs(docsBtn.dataset.docs);
+  else if (move) moveTo(move.dataset.move, move.dataset.to);
+  else if (galleryBtn) openGallery(galleryBtn.dataset.gallery);
   else if (edit) openForm(edit.dataset.edit);
 });
 $('#search').addEventListener('input', renderList);
@@ -512,7 +593,7 @@ function renderCalendar() {
   const first = new Date(y, m - 1, 1), days = new Date(y, m, 0).getDate();
   const offset = (first.getDay() + 6) % 7;   // poniedziałek = pierwszy dzień tygodnia
   const byDay = {};
-  watches.slice().sort(byOrder).forEach(w => w.wears.forEach(d => (byDay[d] ||= []).push(w)));
+  watches.filter(isOwned).sort(byOrder).forEach(w => w.wears.forEach(d => (byDay[d] ||= []).push(w)));
   const thumb = (w, cls = '') => mainThumb(w) ? `<img src="${mainThumb(w)}" alt="">` : `<span class="ic">${watchIcon}</span>`;
   const t = today();
   const cells = [];
@@ -565,20 +646,21 @@ function sinceLine() {
 function renderStats() {
   const el = $('#tab-stats');
   // Kilka zegarków jednego dnia = jeden dzień w statystyce dni.
-  const allDays = new Set(watches.flatMap(w => w.wears));
+  const owned = watches.filter(isOwned);   // zamówione i pożądane nie wchodzą do statystyk
+  const allDays = new Set(owned.flatMap(w => w.wears));
   const totalWears = allDays.size;
   if (!totalWears) {
     el.innerHTML = `${sinceLine()}<div class="empty">Brak zapisanych dni noszenia. Zaznaczaj je w aplikacji <a href="noszenie.html">„Noszę dziś”</a>.</div>`;
     return;
   }
-  const ranked = watches.slice().sort((a, b) => b.wears.length - a.wears.length || (lastWorn(b) || '').localeCompare(lastWorn(a) || ''));
+  const ranked = owned.slice().sort((a, b) => b.wears.length - a.wears.length || (lastWorn(b) || '').localeCompare(lastWorn(a) || ''));
   const top = ranked[0];
   const max = top.wears.length;
   const last30 = [...allDays].filter(d => d >= daysAgo(29)).length;
   // „Najdłużej w szufladzie”: tylko zegarki, których dziś nie nosisz; nienoszone nigdy mają pierwszeństwo.
-  const neverList = watches.filter(w => !w.wears.length).sort(byOrder);
+  const neverList = owned.filter(w => !w.wears.length).sort(byOrder);
   const never = neverList.length;
-  const neglected = watches.filter(w => w.wears.length && lastWorn(w) < today())
+  const neglected = owned.filter(w => w.wears.length && lastWorn(w) < today())
     .sort((a, b) => lastWorn(a).localeCompare(lastWorn(b)))[0];
   const names = list => list.slice(0, 2).map(w => `${esc(w.brand)} ${esc(w.model)}`).join(', ') + (list.length > 2 ? ` i ${list.length - 2} ${plural(list.length - 2, 'inny', 'inne', 'innych')}` : '');
   const drawerKpi = never
@@ -614,7 +696,9 @@ function renderStats() {
 
 /* ===== Formularz ===== */
 const dlg = $('#dlg'), form = $('#form');
-let editingId = null, pendingPhotos = [];
+let editingId = null, pendingPhotos = [], pendingDocs = [];
+const MAX_DOCS = 10;
+const docsOf = w => w.docs || [];
 
 function openForm(id = null) {
   editingId = id;
@@ -626,6 +710,8 @@ function openForm(id = null) {
   form.date.value = w.date || '';
   form.price.value = w.price ?? '';
   form.notes.value = w.notes || '';
+  form.status.value = id ? statusOf(w) : section;   // nowy zegarek trafia do otwartej sekcji
+  updateFormFields();
   // Kopia robocza zdjęć – zmiany trafią do zegarka dopiero po „Zapisz”.
   pendingPhotos = photosOf(w).map(p => ({ ...p }));
   const legacy = pendingPhotos.find(p => p.legacy);
@@ -635,14 +721,26 @@ function openForm(id = null) {
     Zdjecia.makeThumb(legacy.src, legacy.crop).then(t => { legacy.thumb = t; renderPhotoEditor(); });
   }
   renderPhotoEditor();
+  pendingDocs = docsOf(w).map(p => ({ ...p }));
+  renderDocEditor();
   $('#delBtn').hidden = !id;
-  $('#wearSection').hidden = !id;
+  $('#wearSection').hidden = !id || form.status.value !== 'owned';
   $('#wearDate').value = today();
   renderWearHistory();
   dlg.showModal();
 }
 
 // Historia noszenia edytowanego zegarka: usuwanie pomyłek i dopisywanie zapomnianych dni.
+// Pola formularza zależne od statusu.
+function updateFormFields() {
+  const st = form.status.value;
+  $('#dateWrap').hidden = st === 'wish';
+  $('#dateLabel').textContent = st === 'ordered' ? 'Data zamówienia' : 'Data zakupu';
+  $('#priceLabel').textContent = st === 'wish' ? 'Cena orientacyjna (zł)' : 'Cena (zł)';
+  $('#wearSection').hidden = !editingId || st !== 'owned';
+}
+form.status.addEventListener('change', updateFormFields);
+
 function renderWearHistory() {
   const w = editingId && watches.find(x => x.id === editingId);
   if (!w) return;
@@ -673,6 +771,47 @@ $('#wearAddBtn').addEventListener('click', () => {
   cloudWear(w.id, d, true);
   save(); renderAll(); toast(`Dodano: ${fmtDate(d)}`);
 });
+
+// Dokumenty: bez kadrowania – miniatura pokazuje całą kartkę.
+function renderDocEditor() {
+  $('#docTitle').textContent = `Dokumenty (${pendingDocs.length})`;
+  $('#docAdd').hidden = pendingDocs.length >= MAX_DOCS;
+  $('#docGrid').innerHTML = pendingDocs.map((p, i) => `
+    <div class="ph-tile">
+      <div class="ph-img doc">${p.thumb ? `<img src="${p.thumb}" alt="">` : ''}</div>
+      <div class="ph-btns">
+        <button type="button" data-doc="view" data-i="${i}">Pokaż</button>
+        <button type="button" class="del" data-doc="del" data-i="${i}" aria-label="Usuń dokument">✕</button>
+      </div>
+    </div>`).join('');
+}
+$('#docGrid').addEventListener('click', e => {
+  const b = e.target.closest('[data-doc]');
+  if (!b) return;
+  const i = +b.dataset.i;
+  if (b.dataset.doc === 'del') { pendingDocs.splice(i, 1); renderDocEditor(); }
+  else {
+    const w = watches.find(x => x.id === editingId) || {};
+    Zdjecia.gallery(pendingDocs.map(p => ({ thumb: p.thumb, load: () => p.src || fullSrc(w, p) })), i, 'Dokumenty');
+  }
+});
+$('#docInput').addEventListener('change', async e => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  for (const f of files) {
+    if (pendingDocs.length >= MAX_DOCS) { toast(`Maksymalnie ${MAX_DOCS} dokumentów`); break; }
+    try {
+      const src = await Zdjecia.fileToFull(f);
+      const thumb = await Zdjecia.makeThumb(src, { z: 0, x: 0, y: 0 });   // z: 0 = całe zdjęcie w ramce
+      pendingDocs.push({ id: uid(), src, thumb, isNew: true });
+      renderDocEditor();
+    } catch { toast(`Nie udało się wczytać: ${f.name}`); }
+  }
+});
+function openDocs(id) {
+  const w = watches.find(x => x.id === id);
+  Zdjecia.gallery(docsOf(w).map(p => ({ thumb: p.thumb, load: () => fullSrc(w, p) })), 0, `${w.brand} ${w.model} – dokumenty`);
+}
 
 function renderPhotoEditor() {
   const n = pendingPhotos.length;
@@ -731,14 +870,21 @@ form.addEventListener('submit', e => {
     date: form.date.value,
     price: form.price.value === '' ? null : Number(form.price.value),
     notes: form.notes.value.trim(),
+    status: form.status.value,
     photo: ''
   };
   if (pendingPhotos.some(p => !p.thumb)) return toast('Chwila – przygotowuję miniaturę…');
-  const old = editingId ? photosOf(watches.find(x => x.id === editingId)).filter(p => !p.legacy) : [];
+  const prev = editingId ? watches.find(x => x.id === editingId) : null;
+  const old = prev ? [...photosOf(prev).filter(p => !p.legacy), ...docsOf(prev)] : [];
   const id = editingId || uid();
   // Po zalogowaniu pełne zdjęcia idą do chmury osobno; w zegarku zostają tylko miniatury i kadr.
   data.photos = pendingPhotos.map(p => {
     const o = { id: p.id, thumb: p.thumb, crop: p.crop || { z: 1, x: 0, y: 0 } };
+    if (p.src) { if (cloud.user) srcCache[p.id] = p.src; else o.src = p.src; }
+    return o;
+  });
+  data.docs = pendingDocs.map(p => {
+    const o = { id: p.id, thumb: p.thumb };
     if (p.src) { if (cloud.user) srcCache[p.id] = p.src; else o.src = p.src; }
     return o;
   });
@@ -747,17 +893,17 @@ form.addEventListener('submit', e => {
   if (editingId) w = Object.assign(watches.find(x => x.id === editingId), data);
   else watches.push(w = { id, wears: [], order: watches.reduce((m, x) => Math.max(m, x.order ?? -1), -1) + 1, ...data });
   if (!save()) { watches = JSON.parse(backup); return; }
-  pendingPhotos.filter(p => p.isNew && p.src).forEach(p => cloudPhotoPut(p.id, id, p.src));
-  old.filter(p => !data.photos.some(n => n.id === p.id)).forEach(p => cloudPhotoDelete(p.id));
+  [...pendingPhotos, ...pendingDocs].filter(p => p.isNew && p.src).forEach(p => cloudPhotoPut(p.id, id, p.src));
+  old.filter(p => ![...data.photos, ...data.docs].some(n => n.id === p.id)).forEach(p => cloudPhotoDelete(p.id));
   cloudPut(w);
   dlg.close(); renderAll();
-  toast(editingId ? 'Zapisano zmiany' : 'Dodano zegarek');
+  toast(editingId ? 'Zapisano zmiany' : `Dodano do „${SECTIONS[data.status].label}”`);
 });
 
 $('#delBtn').addEventListener('click', () => {
   const w = watches.find(x => x.id === editingId);
   if (!confirm(`Usunąć ${w.brand} ${w.model}? Tej operacji nie można cofnąć.`)) return;
-  photosOf(w).filter(p => !p.legacy).forEach(p => cloudPhotoDelete(p.id));
+  [...photosOf(w).filter(p => !p.legacy), ...docsOf(w)].forEach(p => cloudPhotoDelete(p.id));
   watches = watches.filter(x => x.id !== editingId);
   cloudRemove(editingId);
   save(); dlg.close(); renderAll();
@@ -778,8 +924,8 @@ function renderOrder(movedId) {
     </div>`).join('');
 }
 $('#orderBtn').addEventListener('click', () => {
-  if (watches.length < 2) return toast('Dodaj co najmniej dwa zegarki');
-  ordWork = watches.slice().sort(byOrder);
+  ordWork = watches.filter(w => statusOf(w) === section).sort(byOrder);
+  if (ordWork.length < 2) return toast('W tej sekcji są mniej niż dwa zegarki');
   renderOrder(); orderDlg.showModal();
 });
 $('#ordList').addEventListener('click', e => {
@@ -809,9 +955,10 @@ $('#orderForm').addEventListener('submit', e => {
 $('#exportBtn').addEventListener('click', async () => {
   toast('Przygotowuję kopię ze zdjęciami…');
   let missing = 0;
-  const full = await Promise.all(watches.map(async w => ({ ...w, photos: await Promise.all((w.photos || []).map(async p => {
+  const withSrc = (w, list) => Promise.all((list || []).map(async p => {
     try { return { ...p, src: await fullSrc(w, p) }; } catch { missing++; return p; }
-  })) })));
+  }));
+  const full = await Promise.all(watches.map(async w => ({ ...w, photos: await withSrc(w, w.photos), docs: await withSrc(w, w.docs) })));
   if (missing) toast(`${missing} pełnych zdjęć niedostępnych – w kopii będą tylko miniatury`);
   const blob = new Blob([JSON.stringify({ since: meta.since, watches: full }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
@@ -830,7 +977,7 @@ $('#importFile').addEventListener('change', async e => {
     const data = Array.isArray(parsed) ? parsed : parsed.watches;
     if (!Array.isArray(data)) throw new Error();
     if (!confirm(`Wczytać ${data.length} pozycji i zastąpić obecne dane?`)) return;
-    watches = data.map(w => ({ id: w.id || uid(), wears: [], photo: '', photos: [], ...w }));
+    watches = data.map(w => ({ id: w.id || uid(), wears: [], photo: '', photos: [], docs: [], ...w }));
     meta.since = parsed.since || watches.flatMap(w => w.wears).sort()[0] || today();
     if (cloud.user) { toast('Wysyłam kopię do chmury…'); await replaceCloud(); }
     if (!save() && !cloud.user) return;
@@ -984,7 +1131,7 @@ function sameData(a, b) {
 function listen(u) {
   const { collection, doc, onSnapshot } = cloud.fs;
   cloud.unsub.push(onSnapshot(collection(cloud.db, 'users', u, 'watches'), { includeMetadataChanges: true }, snap => {
-    watches = snap.docs.map(d => ({ id: d.id, wears: [], photo: '', photos: [], ...d.data() }));
+    watches = snap.docs.map(d => ({ id: d.id, wears: [], photo: '', photos: [], docs: [], ...d.data() }));
     save(true); renderAll();
     if (snap.metadata.hasPendingWrites) setSyncStatus(navigator.onLine ? 'Wysyłanie zmian…' : 'Offline – zmiany wyślą się po połączeniu');
     else if (snap.metadata.fromCache) setSyncStatus('Offline – pokazuję ostatnio pobrane dane');
@@ -998,7 +1145,7 @@ function listen(u) {
 const watchRef = id => cloud.fs.doc(cloud.db, 'users', cloud.user.uid, 'watches', id);
 const withoutId = ({ id, ...rest }) => rest;
 // Dokument zegarka w chmurze: bez pełnych zdjęć (te są w osobnych dokumentach, limit 1 MB na dokument).
-const watchDoc = w => ({ ...withoutId(w), photos: (w.photos || []).map(({ src, ...p }) => p) });
+const watchDoc = w => ({ ...withoutId(w), photos: (w.photos || []).map(({ src, ...p }) => p), docs: (w.docs || []).map(({ src, ...p }) => p) });
 const photoRef = id => cloud.fs.doc(cloud.db, 'users', cloud.user.uid, 'photos', id);
 function cloudPhotoPut(id, watchId, src) { cloudDo(() => cloud.fs.setDoc(photoRef(id), { watchId, src })); }
 function cloudPhotoDelete(id) { cloudDo(() => cloud.fs.deleteDoc(photoRef(id))); }
@@ -1020,17 +1167,17 @@ async function replaceCloud() {
   const u = cloud.user.uid;
   const existing = await getDocs(collection(cloud.db, 'users', u, 'watches'));
   // Pełne zdjęcia trzymane dotąd lokalnie: wyślij do chmury (każde osobno – są duże).
-  for (const w of watches) for (const p of (w.photos || [])) {
+  for (const w of watches) for (const p of [...(w.photos || []), ...(w.docs || [])]) {
     if (!p.src) continue;
     await cloud.fs.setDoc(photoRef(p.id), { watchId: w.id, src: p.src });
     srcCache[p.id] = p.src; delete p.src;
   }
   const ops = [];
   const keep = new Set(watches.map(w => w.id));
-  const keepPhotos = new Set(watches.flatMap(w => (w.photos || []).map(p => p.id)));
+  const keepPhotos = new Set(watches.flatMap(w => [...(w.photos || []), ...(w.docs || [])].map(p => p.id)));
   existing.docs.forEach(d => {
     if (!keep.has(d.id)) ops.push(b => b.delete(d.ref));
-    (d.data().photos || []).forEach(p => { if (!keepPhotos.has(p.id)) ops.push(b => b.delete(photoRef(p.id))); });
+    [...(d.data().photos || []), ...(d.data().docs || [])].forEach(p => { if (!keepPhotos.has(p.id)) ops.push(b => b.delete(photoRef(p.id))); });
   });
   watches.forEach(w => ops.push(b => b.set(watchRef(w.id), watchDoc(w))));
   ops.push(b => b.set(doc(cloud.db, 'users', u), { since: meta.since }));

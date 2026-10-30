@@ -189,7 +189,7 @@ function openGallery(id) {
 
 /* ===== Stan ===== */
 let watches = [];
-try { watches = JSON.parse(localStorage.getItem(CACHE_KEY) || '[]'); } catch (e) {}
+try { watches = JSON.parse(localStorage.getItem(CACHE_KEY) || '[]').filter(w => !w.status || w.status === 'owned'); } catch (e) {}
 let loggedIn = false;
 
 /* ===== Widok ===== */
@@ -291,7 +291,9 @@ async function onUser(user) {
   cloud.user = user; loggedIn = true; render();
   const { collection, onSnapshot } = cloud.fs;
   unsub = onSnapshot(collection(cloud.db, 'users', user.uid, 'watches'), { includeMetadataChanges: true }, snap => {
-    watches = snap.docs.map(d => ({ id: d.id, wears: [], photo: '', ...d.data() }));
+    // Tylko zegarki „w kolekcji” – zamówionych i pożądanych nie da się jeszcze nosić.
+    watches = snap.docs.map(d => ({ id: d.id, wears: [], photo: '', ...d.data() }))
+      .filter(w => !w.status || w.status === 'owned');
     try { localStorage.setItem(CACHE_KEY, JSON.stringify(watches)); } catch (e) {}
     render();
     setStatus(snap.metadata.hasPendingWrites ? 'Wysyłanie…'
